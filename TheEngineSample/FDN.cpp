@@ -428,6 +428,7 @@ void FDN::setParameter(Parameter params){
 void FDN::setParameterSafe(Parameter params){
     
 
+    clock_t begin = clock();
     
     printf("Begin Parameter setting:\n");
     parametersFDN = newParametersFDN;
@@ -494,24 +495,42 @@ void FDN::setParameterSafe(Parameter params){
     
     resetReadIndices();
     
-    
-    // set high-frequency attenuation
- //   setHFDecayMultiplier(8000.0f,1.5f,parametersFDN.RT60);
-    
     setHFDecayMultiplier(2000.f,3.0f,parametersFDN.RT60);
     
     resetTapAttenuation(parametersFDN.RT60);
     
-
-    //plot the points
-    for (int i = 0; i < NUMTAPSSTD; i++){
-        printf("%f,", roomBouncePoints[i].x);
-    }
-    printf("NEXTLINE \n");
-    for (int i = 0; i < NUMTAPSSTD; i++){
-        printf("%f,", roomBouncePoints[i].y);
+    clock_t end = clock();
+    
+    double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+    printf("Calculation time: %f\n", elapsed_secs);
+    
+    //Left gain and right gain
+    float LIG = 0.0f;
+    float LOG = 0.0f;
+    float RIG = 0.0f;
+    float ROG = 0.0f;
+    for (int i = 0; i< numTaps; i++){
+        if (parametersFDN.listenerLoc.x <= roomBouncePoints[i].x){
+            RIG += inputGains[i];
+            ROG += outputGains[i];
+        }
+        else{
+            LIG += inputGains[i];
+            LOG += outputGains[i];
+        }
     }
     
+    printf(" Total output gain left: %f, outputgain right: %f, inputgain left:  %f, inputgainRight: %f, totalleft : %f , totalright : %f ", LOG, ROG, LIG, RIG, LOG+LIG, ROG+RIG);
+
+//    //plot the points
+//    for (int i = 0; i < NUMTAPSSTD; i++){
+//        printf("%f,", roomBouncePoints[i].x);
+//    }
+//    printf("NEXTLINE \n");
+//    for (int i = 0; i < NUMTAPSSTD; i++){
+//        printf("%f,", roomBouncePoints[i].y);
+//    }
+//    
     printf("\n\n======Setting End=======\n\n");
 }
 

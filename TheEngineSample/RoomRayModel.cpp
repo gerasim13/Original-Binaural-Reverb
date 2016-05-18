@@ -91,6 +91,7 @@ float RoomRayModel::pythagorasGain(Point2d loc, Point2d* bouncePoint, float heig
     float zVal = (1.f + (height-1.f)*(float)rand()/float(RAND_MAX));
     float distance = sqrtf( powf(loc.distance(*bouncePoint), 2.f) + powf(zVal, 2.f));
     bouncePoint->z = zVal;
+    printf("z : %f", zVal);
     return 1.0f/distance;
 }
 
@@ -231,17 +232,18 @@ void RoomRayModel::setRoomGeometry(Point2d* corners, size_t numCorners){
 
 //Simpler integration method with angle
 float RoomRayModel::integrationSimple(Point2d loc, float x, bool listLoc){
-//    if (listLoc){
-//    float a = -1.0f*loc.x + x;
-//    float b = sqrtf(powf(loc.x, 2.f) + pow(loc.y, 2.f) - 2.f * loc.x * x + pow(x, 2.f));
-//    return (a / (loc.y * b));
-//    }
-//    
-//    else{
+    //With angle, for input gain, not listloc
+    if (!listLoc){
+    float a = -1.0f*loc.x + x;
+    float b = sqrtf(powf(loc.x, 2.f) + pow(loc.y, 2.f) - 2.f * loc.x * x + pow(x, 2.f));
+    return (a / (loc.y * b));
+    }
+    //Without angle, for output gain
+    else{
         float a = (loc.x - x) / loc.y;
         return (- atan(a) / loc.y);
-//    }
-    
+    }
+
 }
 
 Point2d  RoomRayModel::align(Point2d point, Point2d wallvector){
