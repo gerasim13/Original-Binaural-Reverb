@@ -15,6 +15,7 @@
 
 #import <QuartzCore/QuartzCore.h>
 #import "FDN.h"
+#import "Parameter.hpp"
 #import "MultiLevelBiQuadFilter.h"
 #import "DoubleBufferedReverb.h"
 #include <math.h>
@@ -88,8 +89,8 @@ static int kInputChannelsChangedContext;
     
     
     rSize = 0.15f;
-    wRatio = 0.5f;
-    rt60Val = 0.4f;
+    wRatio = INITIALWIDTHRATIO;
+    rt60Val = INITIALRT60;
     
     autoSoundMove = false;
     angle = 0.0f;
@@ -121,7 +122,7 @@ static int kInputChannelsChangedContext;
     
     self.audioController = audioController;
     
-    self.loop1 = [AEAudioFilePlayer audioFilePlayerWithURL:[[NSBundle mainBundle] URLForResource:@"Flamenco" withExtension:@"wav"] error:NULL];
+    self.loop1 = [AEAudioFilePlayer audioFilePlayerWithURL:[[NSBundle mainBundle] URLForResource:@"fullSpectrumImpulse" withExtension:@"wav"] error:NULL];
     _loop1.volume = 1.0;
     _loop1.channelIsMuted = YES;
     _loop1.loop = YES;

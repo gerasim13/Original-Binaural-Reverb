@@ -16,17 +16,20 @@ typedef struct Delays {
         channel = 0;
         inputGainIndex = 0;
         outputGainIndex = 0;
+        extraDelay = false;
     };
-    Delays(float delay, size_t channel, int inputGain, int outputGain){
+    Delays(float delay, size_t channel, int inputGain, int outputGain, bool extraDelay){
         this->delay = delay;
         this->channel = channel;
         this->inputGainIndex = inputGain;
         this->outputGainIndex = outputGain;
+        this->extraDelay = extraDelay;
     }
     float delay;
     size_t channel;
     int inputGainIndex;
     int outputGainIndex;
+    bool extraDelay;
     
 } Delays;
 

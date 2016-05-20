@@ -16,15 +16,15 @@
 
 #define HEIGHT 1.65f
 #define INITIALROOMSIZE 0.15f
-#define INITIALWIDTHRATIO 0.5f
+#define INITIALWIDTHRATIO 0.22f
 #define INITIALLISTENERX 0.5f
 #define INITIALLISTENERY (1.0f/3.0f)
 #define INITIALSOUNDX 0.5f
 #define INITIALSOUNDY (2.0f/3.0f)
-#define INITIALRT60 0.4f
+#define INITIALRT60 1.2f
 #define RADIUSOFHEAD 0.08f //8cm radius of head
 #define ROOMSIZE 30.f //30 metres max
-#define ROOMCEILING 2.f
+#define ROOMCEILING 2.5f
 #define INITIALDIRECTGAIN 1.f ///(4.f*M_PI);
 #define INITIALREVERBGAIN 1.f ///(4.f*M_PI);
 #define REFERENCEDISTANCE 1.f; //The original volume is as loud as we can hear within 1 metre away from the soundsource
@@ -53,6 +53,7 @@ typedef struct Parameter {
         this->reverbGain = INITIALREVERBGAIN;
         
         this->roomRayModelOn = true;
+        this->reflection = 0.98f;
         
     }
     
@@ -72,6 +73,7 @@ typedef struct Parameter {
     float roomWidth, roomHeight;
     float roomCeiling;
     float directGain, reverbGain;
+    float reflection;
     
     bool roomRayModelOn;
     

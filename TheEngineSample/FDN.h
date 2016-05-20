@@ -12,9 +12,9 @@ FDN: a feedback delay network reverberator
 #define UNCIRCULATEDTAPSSMALL (2*DELAYUNITSSMALL*DELAYSPERUNIT)
 //#define UNCIRCULATEDTAPSSTD 2*DELAYUNITSSTD*DELAYSPERUNIT
 #define UNCIRCULATEDTAPSSTD 0
-#define EXTRADELAYS 4
+#define EXTRADELAYS 0
 #define FLOORUNITS 6 //4 * FLOORUNITS >= FLOORDELAYS
-#define DELAYUNITSSTD (5 + EXTRADELAYS + FLOORUNITS)
+#define DELAYUNITSSTD (10 + EXTRADELAYS + FLOORUNITS)
 #define NUMDELAYSSTD (DELAYUNITSSTD * DELAYSPERUNIT)  
 #define FLOORDELAYS 25 //PUT min 4, 9, 16, can try more 25, 36, 64 HERE, ensure FLOORDELAYS < 0.5*NUMDELAYSSTD
 #define SMOOTHINGDELAYS ((EXTRADELAYS * DELAYSPERUNIT) + (FLOORUNITS * DELAYSPERUNIT) - FLOORDELAYS)
@@ -57,6 +57,7 @@ public:
 protected:
     
     Point2d floorBouncePoints[FLOORDELAYS];
+    float directAttenuation;
     
 //    bool bouncepointSet = false;
     void configureRandomModel(float roomSize);
@@ -77,7 +78,6 @@ protected:
     float directDelayTimes[2]; //unit = FREQ * seconds
     Point2d roomBouncePoints[NUMTAPSSTD];
     size_t delayTimesChannel[NUMTAPSSTD];
-    float directMix;
     
     void setTempPoints();
     Point2d tempPoints[CHANNELS];
@@ -86,6 +86,7 @@ protected:
     SingleTapDelay reverbDelays[8];
     void addReverbDelay(float* fdnLeft, float*fdnRight);
 
+    void setDirectGains();
     void setDelayTimes();
     void setDirectDelayTimes();
     void sortDelayTimes();
