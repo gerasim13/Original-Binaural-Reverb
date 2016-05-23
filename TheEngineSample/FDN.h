@@ -12,11 +12,11 @@ FDN: a feedback delay network reverberator
 #define UNCIRCULATEDTAPSSMALL (2*DELAYUNITSSMALL*DELAYSPERUNIT)
 //#define UNCIRCULATEDTAPSSTD 2*DELAYUNITSSTD*DELAYSPERUNIT
 #define UNCIRCULATEDTAPSSTD 0
-#define EXTRADELAYS 0
-#define FLOORUNITS 6 //4 * FLOORUNITS >= FLOORDELAYS
-#define DELAYUNITSSTD (10 + EXTRADELAYS + FLOORUNITS)
+#define EXTRADELAYS 0 //<= DELAYUNITTSTD + FLOORUNITS
+#define FLOORUNITS 4 //4 * FLOORUNITS >= FLOORDELAYS
+#define DELAYUNITSSTD (8 + EXTRADELAYS + FLOORUNITS)
 #define NUMDELAYSSTD (DELAYUNITSSTD * DELAYSPERUNIT)  
-#define FLOORDELAYS 25 //PUT min 4, 9, 16, can try more 25, 36, 64 HERE, ensure FLOORDELAYS < 0.5*NUMDELAYSSTD
+#define FLOORDELAYS 16 //PUT min 4, 9, 16, can try more 25, 36, 64 HERE, ensure FLOORDELAYS < 0.5*NUMDELAYSSTD
 #define SMOOTHINGDELAYS ((EXTRADELAYS * DELAYSPERUNIT) + (FLOORUNITS * DELAYSPERUNIT) - FLOORDELAYS)
 #define NUMTAPSSTD (NUMDELAYSSTD + UNCIRCULATEDTAPSSTD)
 #define AUDIOCHANNELS 2
@@ -90,7 +90,7 @@ protected:
     void setDelayTimes();
     void setDirectDelayTimes();
     void sortDelayTimes();
-    void shortenDelayTimes();
+    void addSmoothingDelayTimes();
     
     //To handle direct Rays
     SingleTapDelay directRays[2];
@@ -103,7 +103,7 @@ protected:
     size_t determineChannel(float x, float y);
     size_t angleToChannel(float angleInDegrees);
     float channelToAngle(size_t channel);
-    
+    float channeltoangleNormal(size_t channel);
     //setting tankout of 8 channels
     void processTankOut(float fdnTankOut[CHANNELS]);
 
@@ -138,6 +138,9 @@ protected:
     //int writeIndex;
 	//int* outTapReadIndices;
     //int* endIndex;
+    float avgDelay;
+    
+    double gain(double rt60, double delayLengthInSamples);
 
 	// delay times
 	//int delayTimes[NUMDELAYS];
@@ -152,6 +155,7 @@ protected:
 	float inputs[NUMDELAYSSTD];
 	float outputsPF[NUMTAPSSTD];
     float outputsAF[NUMTAPSSTD];
+    float outputsBinaural[NUMTAPSSTD];
     
     float outTapSigns[NUMTAPSSTD];
 	float feedbackTapGains[NUMTAPSSTD];
@@ -175,7 +179,7 @@ protected:
     float t[NUMDELAYSSTD];
     float z1a[NUMDELAYSSTD]; //DF1
     float z1b[NUMDELAYSSTD]; //DF1
-    int one_i = 1;
+    float one_i = 1.f;
     float zero_f = 0.0f;
     
     float inputAttenuation;

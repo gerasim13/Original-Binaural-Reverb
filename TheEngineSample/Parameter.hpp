@@ -53,7 +53,9 @@ typedef struct Parameter {
         this->reverbGain = INITIALREVERBGAIN;
         
         this->roomRayModelOn = true;
-        this->reflection = 0.98f;
+        this->reflection = 0.95f;
+        this->roomWidthRatio = 1.0f;
+        this->roomHeightRatio = 1.0f;
         
     }
     
@@ -71,10 +73,11 @@ typedef struct Parameter {
     Point2d soundSourceLoc;
     float roomSizeRatio, RT60, widthRatio,roomSize;
     float roomWidth, roomHeight;
+    float roomWidthRatio, roomHeightRatio;
     float roomCeiling;
     float directGain, reverbGain;
     float reflection;
-    
+
     bool roomRayModelOn;
     
 } Parameter;

@@ -19,6 +19,7 @@ public:
     void setTimeSafe(float seconds);
     void processBuffer(float* input, float* output, size_t numFrames);
     float process(float input);
+    float time;
     
 private:
     void updateLength();

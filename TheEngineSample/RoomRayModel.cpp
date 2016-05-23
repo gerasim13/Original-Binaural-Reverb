@@ -88,10 +88,10 @@ void RoomRayModel::setFloorBouncePointsGain(Point2d* bouncePoints, float* inputG
 }
 
 float RoomRayModel::pythagorasGain(Point2d loc, Point2d* bouncePoint, float height){
-    float zVal = (1.f + (height-1.f)*(float)rand()/float(RAND_MAX));
+    float zVal = ((float)rand()/float(RAND_MAX) * height);
     float distance = sqrtf( powf(loc.distance(*bouncePoint), 2.f) + powf(zVal, 2.f));
     bouncePoint->z = zVal;
-    printf("z : %f", zVal);
+//    printf("z : %f", zVal);
     return 1.0f/distance;
 }
 

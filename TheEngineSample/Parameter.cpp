@@ -27,8 +27,8 @@ void Parameter::setSoundLocation(Point2d Ratio){
 void Parameter::setRoomSize(float size){
     this->roomSizeRatio = size;
     this->roomSize = this->roomSizeRatio * ROOMSIZE;
-    this->roomWidth = this->roomSize * (widthRatio/0.5f);
-    this->roomHeight = this->roomSize * ((1.0f-widthRatio)/0.5f);
+    this->roomWidth = this->roomSize * roomWidthRatio;
+    this->roomHeight = this->roomSize * roomHeightRatio;
     setListenerLocation(this->listenerXYRatio);
     setSoundLocation(this->soundXYRatio);
     printf("Room size is now: %f\n", roomSize);
@@ -36,8 +36,13 @@ void Parameter::setRoomSize(float size){
 
 void Parameter::setWidthRatio(float ratio){
     this->widthRatio = ratio;
-    this->roomWidth = this->roomSize * (widthRatio/0.5f);
-    this->roomHeight = this->roomSize * ((1.0f-widthRatio)/0.5f);
+
+    
+    this->roomWidthRatio = (widthRatio/0.5f);
+    this->roomHeightRatio = ((1.0f-widthRatio)/0.5f);
+    this->roomWidth = this->roomWidthRatio * this->roomSize;
+    this->roomHeight = this->roomHeightRatio * this->roomSize;
+    
     setListenerLocation(this->listenerXYRatio);
     setSoundLocation(this->soundXYRatio);
     printf("New roomWidth: %f, new roomHeight: %f, room size: %f\n", roomWidth, roomHeight, roomSize);
