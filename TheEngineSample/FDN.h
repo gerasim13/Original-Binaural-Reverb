@@ -14,17 +14,19 @@ FDN: a feedback delay network reverberator
 #define UNCIRCULATEDTAPSSTD 0
 #define EXTRADELAYS 0 //<= DELAYUNITTSTD + FLOORUNITS
 #define FLOORUNITS 4 //4 * FLOORUNITS >= FLOORDELAYS
-#define DELAYUNITSSTD (8 + EXTRADELAYS + FLOORUNITS)
+#define DELAYUNITSSTD (10 + EXTRADELAYS + FLOORUNITS)
 #define NUMDELAYSSTD (DELAYUNITSSTD * DELAYSPERUNIT)  
-#define FLOORDELAYS 16 //PUT min 4, 9, 16, can try more 25, 36, 64 HERE, ensure FLOORDELAYS < 0.5*NUMDELAYSSTD
+#define FLOORDELAYS 16//PUT min 4, 9, 16, can try more 25, 36, 64 HERE, ensure FLOORDELAYS < 0.5*NUMDELAYSSTD
 #define SMOOTHINGDELAYS ((EXTRADELAYS * DELAYSPERUNIT) + (FLOORUNITS * DELAYSPERUNIT) - FLOORDELAYS)
-#define NUMTAPSSTD (NUMDELAYSSTD + UNCIRCULATEDTAPSSTD)
+#define WALLDELAYS (NUMDELAYSSTD - SMOOTHINGDELAYS - FLOORDELAYS)
+#define TOTALDELAYS (WALLDELAYS + SMOOTHINGDELAYS + FLOORDELAYS)
 #define AUDIOCHANNELS 2
 #define SAMPLINGRATEF 44100.0f
 #define SOUNDSPEED 340.29f
 //#define CENTIMETRESTOMETRES 0.01f
 //#define CENTIMETRESTOMETRESSQ CENTIMETRESTOMETRES*CENTIMETRESTOMETRES
 #define CHANNELS 8
+
 
 
 #import <Accelerate/Accelerate.h>
@@ -56,18 +58,19 @@ public:
 
 protected:
     
-    Point2d floorBouncePoints[FLOORDELAYS];
     float directAttenuation;
     
 //    bool bouncepointSet = false;
     void configureRandomModel(float roomSize);
     
-    Delays reverbDelayValues[NUMTAPSSTD];
+    Delays reverbDelayValues[TOTALDELAYS];
+    Delays RDN[TOTALDELAYS];
     void shuffleDelays();
     
+    int additionalSmoothingdelay;
     RoomRayModel roomRayModel;
-    float inputGains[NUMTAPSSTD];
-    float outputGains[NUMTAPSSTD];
+    float inputGains[TOTALDELAYS];
+    float outputGains[TOTALDELAYS];
     
     void configureRoomRayModel();
     
@@ -76,8 +79,9 @@ protected:
     void setParameterSafe(Parameter params);
     
     float directDelayTimes[2]; //unit = FREQ * seconds
-    Point2d roomBouncePoints[NUMTAPSSTD];
-    size_t delayTimesChannel[NUMTAPSSTD];
+    Point2d roomBouncePoints[TOTALDELAYS];
+    Point2d rayTraceBP[WALLDELAYS];
+    size_t delayTimesChannel[TOTALDELAYS];
     
     void setTempPoints();
     Point2d tempPoints[CHANNELS];
@@ -121,7 +125,7 @@ protected:
     // delay buffers
 	//float delayBuffers [MAXBUFFERSIZE];
     float* delayBuffers;
-    int delayTimes [NUMTAPSSTD];
+    int delayTimes [TOTALDELAYS];
     int totalDelayTime;
     int numDelays, delayUnits, numTaps, numUncirculatedTaps;
 	//float feedbackAttenuation[NUMDELAYSSTANDARD];
@@ -131,9 +135,9 @@ protected:
     // we put all the indices in one array, then access them via pointers.
     // Keeping all indices in one array allows us to increment all of them with a single
     // optomised vector-scalar addition.
-    float* rwIndices[NUMTAPSSTD];
-    float* startIndices[NUMTAPSSTD];
-    float* endIndices[NUMTAPSSTD];
+    float* rwIndices[TOTALDELAYS];
+    float* startIndices[TOTALDELAYS];
+    float* endIndices[TOTALDELAYS];
     long samplesUntilNextWrap;
     //int writeIndex;
 	//int* outTapReadIndices;
@@ -152,13 +156,13 @@ protected:
 	// fast summing of feedback output.  This avoids calculating the array index of the 
 	// write pointer for every source.  We'll sum the inputs here and then copy only once from here
 	// to the write pointer location.
-	float inputs[NUMDELAYSSTD];
-	float outputsPF[NUMTAPSSTD];
-    float outputsAF[NUMTAPSSTD];
-    float outputsBinaural[NUMTAPSSTD];
+	float inputs[TOTALDELAYS];
+	float outputsPF[TOTALDELAYS];
+    float outputsAF[TOTALDELAYS];
+    float outputsBinaural[TOTALDELAYS];
     
-    float outTapSigns[NUMTAPSSTD];
-	float feedbackTapGains[NUMTAPSSTD];
+    float outTapSigns[TOTALDELAYS];
+	float feedbackTapGains[TOTALDELAYS];
     //float outTapTemp[NUMDELAYSSTANDARD][OUTPUTTAPSPERDELAY];
     //int fbTapIdxBase[NUMDELAYSSTANDARD];
 	//float predelay;

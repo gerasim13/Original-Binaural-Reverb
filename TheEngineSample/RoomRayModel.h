@@ -25,7 +25,8 @@ private:
     void setBouncePoints(Point2d* bouncePoints, Point2d wallOrientation, Point2d wallStart, float wallLength, size_t numPoints, float* outputGains2, float* inputGains2);
     Point2d getBP(float pointSpacing, Point2d wallStart, size_t i, Point2d wallOrientation, float randFlt);
         
-    Point2d soundSourceLoc; Point2d listenerLoc;
+
+
     
     //original integration method
     float getGain(Point2d start, Point2d end, Point2d loc);
@@ -38,7 +39,7 @@ private:
     void setFloorBouncePointsGain(Point2d* bouncePoints, float* inputGain, float* outputGain, size_t floorTaps);
     void gridBP(Point2d* floorBouncePoints, size_t floorTaps);
     float pythagorasGain(Point2d loc, Point2d* bouncePoint, float height);
-    
+        Point2d soundSourceLoc; Point2d listenerLoc;   
     size_t floorTapsPerDimension;
     
     float getMaxGain(float xLower, float xUpper, float yLower, float yUpper);
@@ -47,12 +48,13 @@ private:
     float gridArea;
 public:
     RoomRayModel();
+
     
     void setRoomGeometry(Point2d* corners, size_t numCorners);
     
-    void setLocation(float* rayLengths,size_t numTaps, Point2d listenerLocation, Point2d soundSourceLocation, Point2d* bouncePoints, float* outputGains2, float* inputGains2, Point2d* floorBouncePoints, size_t floorTaps);
+    void setLocation(float* rayLengths,size_t numTaps, Point2d listenerLocation, Point2d soundSourceLocation, Point2d* bouncePoints, float* outputGains2, float* inputGains2, size_t floorTaps);
     
-    
+    void setRayTracingPoints(Point2d* bouncePoints, Point2d ssLocation, float rheight, float rwidth, int numpoints, float* outputGains, float* inputGains,Point2d listloc);
 
 };
 

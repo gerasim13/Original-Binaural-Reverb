@@ -21,7 +21,7 @@
 #define INITIALLISTENERY (1.0f/3.0f)
 #define INITIALSOUNDX 0.5f
 #define INITIALSOUNDY (2.0f/3.0f)
-#define INITIALRT60 1.2f
+#define INITIALRT60 1.75f
 #define RADIUSOFHEAD 0.08f //8cm radius of head
 #define ROOMSIZE 30.f //30 metres max
 #define ROOMCEILING 2.5f

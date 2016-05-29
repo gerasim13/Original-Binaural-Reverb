@@ -19,6 +19,7 @@ RoomRayModel::RoomRayModel(){
 
 //Visibility check when setting a bounce point on the wall
 void RoomRayModel::setBouncePoints(Point2d* bouncePoints, Point2d wallOrientation, Point2d wallStart, float wallLength, size_t numPoints, float* outputGains, float* inputGains){
+    
     // average space between each pair of points
     float pointSpacing = wallLength / numPoints;
     
@@ -91,7 +92,7 @@ float RoomRayModel::pythagorasGain(Point2d loc, Point2d* bouncePoint, float heig
     float zVal = ((float)rand()/float(RAND_MAX) * height);
     float distance = sqrtf( powf(loc.distance(*bouncePoint), 2.f) + powf(zVal, 2.f));
     bouncePoint->z = zVal;
-//    printf("z : %f", zVal);
+    printf("z : %f", zVal);
     return 1.0f/distance;
 }
 
@@ -107,79 +108,81 @@ float RoomRayModel::getMaxGain(float xLower, float xUpper, float yLower, float y
     float d = calcMaxGain(yLower, xLower);
     return ((a-b) - (c-d));
 }
-void RoomRayModel::setLocation(float* rayLengths, size_t numTaps, Point2d listenerLocation, Point2d soundSourceLocation, Point2d* bouncePoints, float* outputGains, float* inputGains, Point2d* floorBouncePoints, size_t floorTaps){
+void RoomRayModel::setLocation(float* rayLengths, size_t numTaps, Point2d listenerLocation, Point2d soundSourceLocation, Point2d* bouncePoints, float* outputGains, float* inputGains, size_t floorTaps){
     srand (1);
     
-    numTaps -= floorTaps;
+//    numTaps -= floorTaps;
     floorTapsPerDimension = (size_t) sqrtf(floorTaps);
-    
-    assert(numCorners > 0); // the geometry must be initialised before now
-    soundSourceLoc = soundSourceLocation;
-    listenerLoc = listenerLocation;
-    
-    // set the number of taps on each wall proportional to the
-    // length of the wall
-    size_t numTapsOnWall[RRM_MAX_CORNERS];
-    size_t totalTaps = 0;
-    for (size_t i = 0; i < RRM_MAX_CORNERS; i++) {
-        numTapsOnWall[i] = (size_t)floor(wallLengths[i]/totalWallLength * (float)numTaps);
-        totalTaps += numTapsOnWall[i];
-    }
-    
-    // if the number of taps now assigned isn't enough, add one tap to
-    // each wall until we have the desired number
-    size_t i = 0;
-    while (totalTaps < numTaps) {
-        numTapsOnWall[i]++;
-        i++;
-        totalTaps++;
-        if (i == RRM_MAX_CORNERS) i = 0;
-    }
-
-    // set bounce points for each wall
-    size_t j = 0;
-    for (size_t i = 0; i < numCorners; i++) {
-        //must be corner i-1 or shift the corner values firston
-        setBouncePoints(&bouncePoints[j], wallOrientations[i], corners[i], wallLengths[i], numTapsOnWall[i],&outputGains[j],&inputGains[j]);
-        j += numTapsOnWall[i];
-    }
-    
+//
+//    assert(numCorners > 0); // the geometry must be initialised before now
+//    soundSourceLoc = soundSourceLocation;
+//    listenerLoc = listenerLocation;
+//    
+//    // set the number of taps on each wall proportional to the
+//    // length of the wall
+//    size_t numTapsOnWall[RRM_MAX_CORNERS];
+//    size_t totalTaps = 0;
+//    for (size_t i = 0; i < RRM_MAX_CORNERS; i++) {
+//        numTapsOnWall[i] = (size_t)floor(wallLengths[i]/totalWallLength * (float)numTaps);
+//        totalTaps += numTapsOnWall[i];
+//    }
+//    
+//    // if the number of taps now assigned isn't enough, add one tap to
+//    // each wall until we have the desired number
+//    size_t i = 0;
+//    while (totalTaps < numTaps) {
+//        numTapsOnWall[i]++;
+//        i++;
+//        totalTaps++;
+//        if (i == RRM_MAX_CORNERS) i = 0;
+//    }
+//
+//    // set bounce points for each wall
+//    size_t j = 0;
+//    for (size_t i = 0; i < numCorners; i++) {
+//        //must be corner i-1 or shift the corner values firston
+//        setBouncePoints(&bouncePoints[j], wallOrientations[i], corners[i], wallLengths[i], numTapsOnWall[i],&outputGains[j],&inputGains[j]);
+//        j += numTapsOnWall[i];
+//    }
+//    
     
     // set bounce points for the floor
-
+    size_t j = numTaps - floorTaps;
     gridBP(&bouncePoints[j], floorTapsPerDimension);
 
     
     setFloorBouncePointsGain(&bouncePoints[j], &inputGains[j], &outputGains[j], floorTaps);
     numTaps += floorTaps;
     
-    // normalize the total input gain to 1.0f
-    float totalSquaredInputGain = 0.0f;
-    for (size_t i = 0; i < numTaps; i++) {
-        inputGains[i] = fabsf(inputGains[i]*ROOMCEILING); //multiply by the room ceiling
-        totalSquaredInputGain += inputGains[i]*inputGains[i];
-    }
-
-    float inGainNormalize = 1.0f / sqrt(totalSquaredInputGain);
-    for (size_t i = 0; i < numTaps; i++) {
-        inputGains[i] *= inGainNormalize;
-       // printf("inputGains[%lu] : %f \n", i, inputGains[i]);
-    }
     
-    //normalize the total out gain to 1.0f
-    float totalSquaredOutputGain = 0.0f;
-    for (size_t i = 0; i< numTaps; i++){
-        outputGains[i] = fabsf(outputGains[i]);
-     //   printf("Output gain: %f \n", outputGains[i]);
-        totalSquaredOutputGain += outputGains[i]*outputGains[i];
-    }
-
-    float outputGainNormalize = 1.0f / sqrtf(totalSquaredOutputGain);
-    for (size_t i = 0; i< numTaps; i++){
-        outputGains[i] *= outputGainNormalize;
-       // printf("OutputGain[%lu] : %f \n", i, outputGains[i]);
-    }
     
+//    // normalize the total input gain to 1.0f
+//    float totalSquaredInputGain = 0.0f;
+//    for (size_t i = 0; i < numTaps; i++) {
+//        inputGains[i] = fabsf(inputGains[i]*ROOMCEILING); //multiply by the room ceiling
+//        totalSquaredInputGain += inputGains[i]*inputGains[i];
+//    }
+//
+//    float inGainNormalize = 1.0f / sqrt(totalSquaredInputGain);
+//    for (size_t i = 0; i < numTaps; i++) {
+//        inputGains[i] *= inGainNormalize;
+//       // printf("inputGains[%lu] : %f \n", i, inputGains[i]);
+//    }
+//    
+//    //normalize the total out gain to 1.0f
+//    float totalSquaredOutputGain = 0.0f;
+//    for (size_t i = 0; i< numTaps; i++){
+//        outputGains[i] = fabsf(outputGains[i]);
+//     //   printf("Output gain: %f \n", outputGains[i]);
+//        totalSquaredOutputGain += outputGains[i]*outputGains[i];
+//    }
+//
+//    float outputGainNormalize = 1.0f / sqrtf(totalSquaredOutputGain);
+//    for (size_t i = 0; i< numTaps; i++){
+//        outputGains[i] *= outputGainNormalize;
+//       // printf("OutputGain[%lu] : %f \n", i, outputGains[i]);
+//    }
+//    
 
 }
 
@@ -268,5 +271,93 @@ float  RoomRayModel::xAlignedIntegration(Point2d loc, Point2d ptStart, Point2d p
     float endVal = integrationSimple(alignedLoc, alignedEnd.x, listLoc);
     float startVal = integrationSimple(alignedLoc, 0.0f, listLoc);
     
-    return endVal - startVal;
+   // printf("endval %f startval %f \n", endVal, startVal);
+    return fabs(endVal - startVal);
+    
+}
+
+
+void RoomRayModel::setRayTracingPoints(Point2d* bouncePoints, Point2d ssLoc, float rheight, float rwidth, int numpoints, float* outputGains, float* inputGains, Point2d listloc){
+    
+    listenerLoc = listloc;
+    soundSourceLoc = ssLoc;
+    float yBot = 0.0f-ssLoc.y;
+    float yTop = rheight - ssLoc.y;
+    float xLeft = 0.0f - ssLoc.x;
+    float xRight = rwidth - ssLoc.x;
+    
+    float w = ssLoc.x;
+    float h = ssLoc.y;
+    
+    for (int i = 0; i < numpoints/2; i++){
+        float angle = (360.f / float(numpoints)) * float(i);
+       // printf("Angle : %f \n", angle);
+        float m = 1.0f/tan(angle * M_PI / 180.f);
+        //y = mx + 0
+        Point2d pointArray[4] = {Point2d(yBot/m, yBot),
+            Point2d(yTop/m, yTop),
+            Point2d(xLeft, m*xLeft),
+            Point2d(xRight, m*xRight)};
+        
+        for (int j = 0; j< 4; j++){
+            float xO = pointArray[j].x + ssLoc.x;
+            if (xO > rwidth or xO < 0.0f){
+                pointArray[j].mark = false;
+                continue;
+            }
+            float yO = pointArray[j].y + ssLoc.y;
+            if (yO > rheight or yO < 0.0f){
+                pointArray[j].mark = false;
+                continue;
+            }
+            if (pointArray[j].mark == true){
+                //check for x value
+                if (pointArray[j].x >= 0){
+                    bouncePoints[i].x = pointArray[j].x + w;
+                    bouncePoints[i].y = pointArray[j].y + h;
+                }
+                else{
+                    bouncePoints[i+numpoints/2].x = pointArray[j].x + w;
+                    bouncePoints[i+numpoints/2].y = pointArray[j].y + h;
+                }
+            }
+        }
+    }
+    
+    Point2d prevStart = bouncePoints[0];
+    
+  //  printf("List loc %f %f ssloc %f %f \n", listenerLoc.x, listenerLoc.y, soundSourceLoc.x, soundSourceLoc.y);
+    // set the points at even but randomly jittered locations
+    for (size_t i = 1; i < numpoints; i++) {
+
+            Point2d start = prevStart;
+            Point2d difference = (bouncePoints[i] - bouncePoints[i-1]).scalarMul(0.5f);
+            Point2d end = bouncePoints[i-1] + difference;
+        
+     //   printf("Start : %f %f , end : %f %f \n", start.x, start.y, end.x, end.y);
+            outputGains[i-1] =  sqrtf( xAlignedIntegration(listloc, start, end, true));
+            inputGains[i-1] = sqrtf(xAlignedIntegration(ssLoc, start, end, false));
+//        printf("i : %d OutputGains : %f \n", i,outputGains[i-1]);
+//        printf("i : %d InputGains : %f \n", i,inputGains[i-1]);
+
+            prevStart = Point2d(end.x, end.y);
+        
+        
+    }
+    
+    //do the last gain
+    Point2d end = bouncePoints[numpoints-1];
+    outputGains[numpoints-1] = sqrtf(xAlignedIntegration(listloc, prevStart, end, true));
+    inputGains[numpoints-1] =  sqrtf(xAlignedIntegration(ssLoc, prevStart, end, false));
+    
+    printf("OutputGains : %f \n", outputGains[numpoints-1]);
+    printf("InputGains : %f \n", inputGains[numpoints-1]);
+//        printf("S loc x : %f , y : %f \n", ssLoc.x, ssLoc.y);
+//        for (int i = 0; i<numpoints;i++){
+//            printf("%f,", bouncePoints[i].x);
+//        }
+//    printf("\n\n");
+//    for (int i = 0; i<numpoints;i++){
+//        printf("%f,", bouncePoints[i].y);
+//    }
 }

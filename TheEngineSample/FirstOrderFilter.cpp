@@ -32,9 +32,9 @@ void FirstOrderFilter::setAngle(float theta, float fc, bool right){
 //   // float initTheta = theta;
     
     
-     if ((theta >= 0.f and theta <= 170.f) or (theta <= 0.f and theta >= -170.f))
+   //  if ((theta >= 0.f and theta <= 170.f) or (theta <= 0.f and theta >= -170.f))
     //  if (theta >= -150.f and theta <= 150.f)
-        theta = theta - 90.f;
+        theta = -theta + 90.f;
     
    // theta = theta - 90.0f;
     float theta0 = 150.0f ;
