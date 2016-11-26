@@ -701,7 +701,7 @@ static OSStatus ioUnitRenderNotifyCallback(void *inRefCon, AudioUnitRenderAction
             NSTimeInterval threshold = THIS->_currentBufferDuration * 0.5;
             if ( duration >= AEHostTicksFromSeconds(threshold) && AERateLimit() ) {
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    NSLog(@"TAAE: Warning: render took too long (%lfs, should be less than %lfs). Expect glitches.", AESecondsFromHostTicks(duration), threshold);
+                  //  NSLog(@"TAAE: Warning: render took too long (%lfs, should be less than %lfs). Expect glitches.", AESecondsFromHostTicks(duration), threshold);
                 });
             }
         

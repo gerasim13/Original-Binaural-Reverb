@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "0700"
-   version = "2.0">
+   version = "1.3">
    <BuildAction
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES">
@@ -20,6 +20,20 @@
                ReferencedContainer = "container:TheAmazingAudioEngine.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4C0C24841599FADD00D23E13"
+               BuildableName = "TheEngineSample.app"
+               BlueprintName = "TheEngineSample"
+               ReferencedContainer = "container:TheEngineSample.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -29,11 +43,20 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
       </Testables>
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "4C0C24841599FADD00D23E13"
+            BuildableName = "TheEngineSample.app"
+            BlueprintName = "TheEngineSample"
+            ReferencedContainer = "container:TheEngineSample.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
       <AdditionalOptions>
       </AdditionalOptions>
    </TestAction>
    <LaunchAction
-      buildConfiguration = "Release"
+      buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "0"
@@ -41,45 +64,42 @@
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
-      allowLocationSimulation = "YES"
-      launchAutomaticallySubstyle = "2">
-      <PathRunnable
-         runnableDebuggingMode = "0"
-         FilePath = "/Users/natalieagus/Library/Developer/Xcode/DerivedData/TheAmazingAudioEngine-gnzlnwkipmqdkkfugomtbstwdqkn/Build/Products/TheAmazingAudioEngine">
-      </PathRunnable>
-      <MacroExpansion>
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "4C215CEB1523A7D500D36CAD"
-            BuildableName = "libTheAmazingAudioEngine.a"
-            BlueprintName = "TheAmazingAudioEngine"
-            ReferencedContainer = "container:TheAmazingAudioEngine.xcodeproj">
+            BlueprintIdentifier = "4C0C24841599FADD00D23E13"
+            BuildableName = "TheEngineSample.app"
+            BlueprintName = "TheEngineSample"
+            ReferencedContainer = "container:TheEngineSample.xcodeproj">
          </BuildableReference>
-      </MacroExpansion>
+      </BuildableProductRunnable>
       <AdditionalOptions>
       </AdditionalOptions>
    </LaunchAction>
    <ProfileAction
-      buildConfiguration = "Release"
+      buildConfiguration = "Debug"
       shouldUseLaunchSchemeArgsEnv = "YES"
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
-      <MacroExpansion>
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "4C215CEB1523A7D500D36CAD"
-            BuildableName = "libTheAmazingAudioEngine.a"
-            BlueprintName = "TheAmazingAudioEngine"
-            ReferencedContainer = "container:TheAmazingAudioEngine.xcodeproj">
+            BlueprintIdentifier = "4C0C24841599FADD00D23E13"
+            BuildableName = "TheEngineSample.app"
+            BlueprintName = "TheEngineSample"
+            ReferencedContainer = "container:TheEngineSample.xcodeproj">
          </BuildableReference>
-      </MacroExpansion>
+      </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">
    </AnalyzeAction>
    <ArchiveAction
-      buildConfiguration = "Release"
+      buildConfiguration = "Debug"
       revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>

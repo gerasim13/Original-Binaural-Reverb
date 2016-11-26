@@ -159,7 +159,7 @@ BOOL AERateLimit(void) {
     }
     if ( ++messageCount >= 10 ) {
         if ( messageCount == 10 ) {
-            NSLog(@"TAAE: Suppressing some messages");
+          //  NSLog(@"TAAE: Suppressing some messages");
         }
         return NO;
     }
