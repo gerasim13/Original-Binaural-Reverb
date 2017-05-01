@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2C0118A41D7FECC300C00475 /* BMMultiTapDelay.c in Sources */ = {isa = PBXBuildFile; fileRef = 2C0118A21D7FECC300C00475 /* BMMultiTapDelay.c */; };
+		2C0CD7901EA7A79F008C5DA3 /* guitarAcoustic.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 2C0CD78F1EA7A79F008C5DA3 /* guitarAcoustic.m4a */; };
 		2C13B31B1D79C89200E8DEFA /* Gains.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2C13B3131D79C89200E8DEFA /* Gains.cpp */; };
 		2C13B31C1D79C89200E8DEFA /* MonteCarlo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2C13B3151D79C89200E8DEFA /* MonteCarlo.cpp */; };
 		2C13B31D1D79C89200E8DEFA /* Plane3D.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2C13B3171D79C89200E8DEFA /* Plane3D.cpp */; };
@@ -91,6 +92,7 @@
 /* Begin PBXFileReference section */
 		2C0118A21D7FECC300C00475 /* BMMultiTapDelay.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = BMMultiTapDelay.c; sourceTree = "<group>"; };
 		2C0118A31D7FECC300C00475 /* BMMultiTapDelay.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BMMultiTapDelay.h; sourceTree = "<group>"; };
+		2C0CD78F1EA7A79F008C5DA3 /* guitarAcoustic.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; path = guitarAcoustic.m4a; sourceTree = "<group>"; };
 		2C13B3131D79C89200E8DEFA /* Gains.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Gains.cpp; sourceTree = "<group>"; };
 		2C13B3141D79C89200E8DEFA /* Gains.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = Gains.hpp; sourceTree = "<group>"; };
 		2C13B3151D79C89200E8DEFA /* MonteCarlo.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MonteCarlo.cpp; sourceTree = "<group>"; };
@@ -208,6 +210,7 @@
 		2C72A0331C076D550054BA3A /* soundsamples */ = {
 			isa = PBXGroup;
 			children = (
+				2C0CD78F1EA7A79F008C5DA3 /* guitarAcoustic.m4a */,
 				2C7BB83F1CC6A1C8004F78B7 /* flute_music.wav */,
 				2CC072F61D8992CC00E6EC8D /* fullSpectrumImpulse.wav */,
 				2CC0BADC1D89161B00F77DA0 /* sinesweep.wav */,
@@ -223,43 +226,43 @@
 		3ACBFF911B9934B60077484B /* AudioProcessing */ = {
 			isa = PBXGroup;
 			children = (
-				2C0118A21D7FECC300C00475 /* BMMultiTapDelay.c */,
-				2C0118A31D7FECC300C00475 /* BMMultiTapDelay.h */,
-				2CEB3DAB1D79E6AD00809998 /* Cuboid.cpp */,
-				2CEB3DAC1D79E6AD00809998 /* Cuboid.hpp */,
-				2CB295B51D884C53006B62A1 /* energyTerm.cpp */,
-				2CB295B61D884C53006B62A1 /* energyTerm.hpp */,
-				2C13B3131D79C89200E8DEFA /* Gains.cpp */,
-				2C13B3141D79C89200E8DEFA /* Gains.hpp */,
-				2C13B3151D79C89200E8DEFA /* MonteCarlo.cpp */,
-				2C13B3161D79C89200E8DEFA /* MonteCarlo.hpp */,
-				2C13B3171D79C89200E8DEFA /* Plane3D.cpp */,
-				2C13B3181D79C89200E8DEFA /* Plane3D.hpp */,
-				2C13B3191D79C89200E8DEFA /* Vector3D.cpp */,
-				2C13B31A1D79C89200E8DEFA /* Vector3D.hpp */,
-				2CE69B891BC5068100072C04 /* SingleTapDelay.cpp */,
-				2CE69B8A1BC5068100072C04 /* SingleTapDelay.h */,
-				3ACBFF9F1B9941A20077484B /* Constants.h */,
 				3ACBFF961B9941530077484B /* BiQuadFilter.cpp */,
 				3ACBFF971B9941530077484B /* BiQuadFilter.h */,
+				2C0118A21D7FECC300C00475 /* BMMultiTapDelay.c */,
+				2C0118A31D7FECC300C00475 /* BMMultiTapDelay.h */,
+				3ACBFF9F1B9941A20077484B /* Constants.h */,
+				2CEB3DAB1D79E6AD00809998 /* Cuboid.cpp */,
+				2CEB3DAC1D79E6AD00809998 /* Cuboid.hpp */,
+				2CE0CEF01BF572BD00E9699E /* Delays.cpp */,
+				2CE0CEF11BF572BD00E9699E /* Delays.hpp */,
+				2C2707DF1BDF31C900EFD5CD /* DoubleBufferedReverb.cpp */,
+				2C2707E01BDF31C900EFD5CD /* DoubleBufferedReverb.h */,
+				2CB295B51D884C53006B62A1 /* energyTerm.cpp */,
+				2CB295B61D884C53006B62A1 /* energyTerm.hpp */,
+				3ACBFF921B9934EE0077484B /* FDN.cpp */,
+				3ACBFF931B9934EE0077484B /* FDN.h */,
 				3ACBFF981B9941530077484B /* FirstOrderFilter.cpp */,
 				3ACBFF991B9941530077484B /* FirstOrderFilter.h */,
 				3ACBFF9A1B9941530077484B /* FourthOrderFilter.cpp */,
 				3ACBFF9B1B9941530077484B /* FourthOrderFilter.h */,
-				3ACBFF921B9934EE0077484B /* FDN.cpp */,
-				3ACBFF931B9934EE0077484B /* FDN.h */,
-				2CE0CEF01BF572BD00E9699E /* Delays.cpp */,
-				2CE0CEF11BF572BD00E9699E /* Delays.hpp */,
+				2C13B3131D79C89200E8DEFA /* Gains.cpp */,
+				2C13B3141D79C89200E8DEFA /* Gains.hpp */,
+				2C13B3151D79C89200E8DEFA /* MonteCarlo.cpp */,
+				2C13B3161D79C89200E8DEFA /* MonteCarlo.hpp */,
 				3ACBFFA01B9945370077484B /* MultiLevelBiQuadFilter.cpp */,
 				3ACBFFA11B9945370077484B /* MultiLevelBiQuadFilter.h */,
-				3A9464251BA6BB1F00818778 /* QuadraturePhaseEnvelopeFollower.cpp */,
-				3A9464261BA6BB1F00818778 /* QuadraturePhaseEnvelopeFollower.h */,
-				2C2707DF1BDF31C900EFD5CD /* DoubleBufferedReverb.cpp */,
-				2C2707E01BDF31C900EFD5CD /* DoubleBufferedReverb.h */,
 				2C7CD63A1BE0C920000F26E2 /* Parameter.cpp */,
 				2C7CD63B1BE0C920000F26E2 /* Parameter.hpp */,
+				2C13B3171D79C89200E8DEFA /* Plane3D.cpp */,
+				2C13B3181D79C89200E8DEFA /* Plane3D.hpp */,
+				3A9464251BA6BB1F00818778 /* QuadraturePhaseEnvelopeFollower.cpp */,
+				3A9464261BA6BB1F00818778 /* QuadraturePhaseEnvelopeFollower.h */,
 				2CD0C0A11BE7A9E1009D9971 /* SecondOrderFilter.cpp */,
 				2CD0C0A21BE7A9E1009D9971 /* SecondOrderFilter.hpp */,
+				2CE69B891BC5068100072C04 /* SingleTapDelay.cpp */,
+				2CE69B8A1BC5068100072C04 /* SingleTapDelay.h */,
+				2C13B3191D79C89200E8DEFA /* Vector3D.cpp */,
+				2C13B31A1D79C89200E8DEFA /* Vector3D.hpp */,
 			);
 			name = AudioProcessing;
 			sourceTree = "<group>";
@@ -464,6 +467,7 @@
 				2C7BB8431CD0CB4B004F78B7 /* Flamenco.wav in Resources */,
 				2CC0BADD1D89161B00F77DA0 /* sinesweep.wav in Resources */,
 				4C0C24AF1599FD5800D23E13 /* Icon-72.png in Resources */,
+				2C0CD7901EA7A79F008C5DA3 /* guitarAcoustic.m4a in Resources */,
 				2C3C6C5A1C2163E2004A63A8 /* acapellafemale2.wav in Resources */,
 				2CE69B9C1BCCE53800072C04 /* SpeakerTouched.png in Resources */,
 				2C3C6C551C21618F004A63A8 /* acapellafemale.wav in Resources */,

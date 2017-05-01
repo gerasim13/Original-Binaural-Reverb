@@ -10,7 +10,7 @@
 #define Vector3D_hpp
 #include <math.h>
 #include <stdio.h>
-#define HEIGHT 1.5f
+#define HEIGHT 1.7f
 
 typedef struct Vector3D {
     

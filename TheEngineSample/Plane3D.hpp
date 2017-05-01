@@ -46,8 +46,8 @@ typedef struct Plane3D {
     }
     
     Vector3D getMidpoint(){
-        Vector3D out = corner.add(S1.scalarMult(S1.magnitude()/2));
-        out = out.add(S2.scalarMult(S2.magnitude()/2));
+        Vector3D out = corner.add(S1.scalarMult(0.5f));
+        out = out.add(S2.scalarMult(0.5f));
         return out;
     }
     

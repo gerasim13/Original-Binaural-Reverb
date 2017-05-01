@@ -18,14 +18,14 @@
 #import "energyTerm.hpp"
 
 
-#define DMIN 3.0f
+#define DMIN 0.5f
 
-//change them to make the first order reflections lose energy if you have to. 
-#define NUM_MONTECARLO 200
+//change them to make the first order reflections lose energy if you have to.
+#define NUM_MONTECARLO 20
 #define KD 1.0f
 #define KS 0.0f
 #define ENERGYINITIAL 1.0f
-#define ALPHA 0.0f //0.0 is absorb nothing
+#define ALPHA 0.0f
 
 typedef struct Gains{
     
@@ -33,12 +33,13 @@ typedef struct Gains{
     
     }
     //Constructor with arguments
-    Gains(float dmin, int numberDelays, float totalSurfaceArea){
+    Gains(float dmin, int numberDelays, float totalSurfaceArea, float* feedbackTapGains){
         this->dmin = dmin ;
         this->numberDelays = numberDelays;
         this->totalSurfaceArea = totalSurfaceArea;
         this->totalInputEnergy = 0.f;
         this->correctInputEnergy = 4.f * M_PI * powf(dmin, 2) * ENERGYINITIAL;
+        this->feedbackTapGains = feedbackTapGains;
     };
     
     
@@ -73,6 +74,7 @@ typedef struct Gains{
     float* upsilon;
     float* mu;
     float* beta;
+    float* feedbackTapGains;
 
     
     float totalInputEnergy;

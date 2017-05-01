@@ -25,7 +25,7 @@ extern "C" {
         size_t maxDelayTime = 0;
         printf("numTapsL : %zu \n", numTapsL);
         for(size_t i=0; i < numTapsL; i++){
-            printf("delayTimesL[i] %zu \n", delayTimesL[i]);
+//            printf("delayTimesL[i] %zu \n", delayTimesL[i]);
             if(delayTimesL[i] > maxDelayTime){
             
                 maxDelayTime = delayTimesL[i];
