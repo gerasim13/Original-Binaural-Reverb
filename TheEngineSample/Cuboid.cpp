@@ -10,6 +10,80 @@
 #include <algorithm>    // std::sort
 using namespace std;
 
+
+
+void Cuboid::sliceCube(int slices){
+
+    
+    int toSlice = 0;
+    
+    while(true){
+        if (6*toSlice * toSlice < slices){
+            toSlice += 1;
+        }
+        if (6*toSlice * toSlice > slices){
+            toSlice -= 1;
+            break;
+        }
+        
+    }
+    
+    //    printf("toSlice is : %d\n" , toSlice);
+    segmentCube(toSlice*toSlice);
+    
+    int cubicTiles = 6*toSlice*toSlice;
+    Plane3D* newSegmentedSides = new Plane3D[slices];
+    
+    //copy into newSegmentedSides
+    for (int i = 0; i<cubicTiles; i++){
+        newSegmentedSides[i] = Plane3D(segmentedSides[i].corner, segmentedSides[i].S1, segmentedSides[i].S2);
+    }
+    
+    elements = slices;
+    int remainder = slices - cubicTiles;
+    int index = cubicTiles;
+    
+    srand(11);
+    int randNum = rand()%(cubicTiles-1);
+    //divide some plane into two
+    for (int i = 0; i<remainder; i++){
+        Plane3D refPlane = segmentedSides[randNum];
+        //divide into two along S1
+        if (randNum %2 == 0){
+            Vector3D newCorner = refPlane.corner.add(refPlane.S1.scalarMult(0.5f));
+            Vector3D newS1 = refPlane.S1.scalarMult(0.5f);
+            newSegmentedSides[randNum] = Plane3D(refPlane.corner, newS1, refPlane.S2);
+            newSegmentedSides[index] = Plane3D(newCorner, newS1, refPlane.S2);
+            index++;
+            randNum = rand()%(cubicTiles-1);
+        }
+        else{
+            Vector3D newCorner = refPlane.corner.add(refPlane.S2.scalarMult(0.5f));
+            Vector3D newS2 = refPlane.S2.scalarMult(0.5f);
+            newSegmentedSides[randNum] = Plane3D(refPlane.corner,  refPlane.S1, newS2);
+            newSegmentedSides[index] = Plane3D(newCorner,refPlane.S1, newS2);
+            index++;
+            randNum = rand()%(cubicTiles-1);
+        }
+    }
+    
+    
+    segmentedSides = new Plane3D[slices];
+    
+    //copy back into segmentedsides
+    for (int i = 0; i<elements; i++){
+        segmentedSides[i] = Plane3D(newSegmentedSides[i].corner, newSegmentedSides[i].S1, newSegmentedSides[i].S2);
+    }
+    
+    free(newSegmentedSides);
+    
+    //
+
+    
+    
+}
+
+
 void Cuboid::segmentCube(int tilesPerSide){
     
     //Make sure tilesPerSide can be exactly square-rooted

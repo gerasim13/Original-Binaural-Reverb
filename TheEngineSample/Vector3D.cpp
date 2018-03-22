@@ -38,7 +38,7 @@ Vector3D Vector3D::scalarMult(float scalar){
 }
 
 float Vector3D::magnitude(){
-    return sqrtf(powf(x, 2) + powf(y, 2) + powf(z, 2));
+    return sqrtf(powf(this->x, 2) + powf(this->y, 2) + powf(this->z, 2));
 }
 
 Vector3D Vector3D::normalize(){

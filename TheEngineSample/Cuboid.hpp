@@ -67,6 +67,7 @@ typedef struct Cuboid{
         this->zLength = zLength;
     }
     
+    void sliceCube(int slices);
     void segmentCube(int tilesPerSide);
     
     float segmentCubeOnce(int d);

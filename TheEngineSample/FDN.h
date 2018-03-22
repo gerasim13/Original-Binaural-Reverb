@@ -4,38 +4,52 @@ FDN: a feedback delay network reverberator
 
 */
 
+#include "Cuboid.hpp"
+#include "Gains.hpp"
+#include "Vector3D.hpp"
+#include "BMMultiTapDelay.h"
+
+
 #pragma once
 
 
-#define DELAYUNITSSMALL 3
-#define DELAYSPERUNIT 4
-#define UNCIRCULATEDTAPSSMALL (2*DELAYUNITSSMALL*DELAYSPERUNIT)
+//#define DELAYUNITSSMALL 3
+#define DELAYSPERUNIT 64
+#define DELAYUNITSSTD 1
+//#define UNCIRCULATEDTAPSSMALL (2*DELAYUNITSSMALL*DELAYSPERUNIT)
 //#define UNCIRCULATEDTAPSSTD 2*DELAYUNITSSTD*DELAYSPERUNIT
-#define UNCIRCULATEDTAPSSTD 0
-#define EXTRADELAYS 0 //<= DELAYUNITTSTD + FLOORUNITS
-#define FLOORUNITS 4 //4 * FLOORUNITS >= FLOORDELAYS
-#define DELAYUNITSSTD (10 + EXTRADELAYS + FLOORUNITS)
-#define NUMDELAYSSTD (DELAYUNITSSTD * DELAYSPERUNIT)  
-#define FLOORDELAYS 16//PUT min 4, 9, 16, can try more 25, 36, 64 HERE, ensure FLOORDELAYS < 0.5*NUMDELAYSSTD
-#define SMOOTHINGDELAYS ((EXTRADELAYS * DELAYSPERUNIT) + (FLOORUNITS * DELAYSPERUNIT) - FLOORDELAYS)
-#define WALLDELAYS (NUMDELAYSSTD - SMOOTHINGDELAYS - FLOORDELAYS)
-#define TOTALDELAYS (WALLDELAYS + SMOOTHINGDELAYS + FLOORDELAYS)
+//#define UNCIRCULATEDTAPSSTD 0
+//#define EXTRADELAYS 0 //<= DELAYUNITTSTD + FLOORUNITS
+//#define FLOORUNITS 0 //4 * FLOORUNITS >= FLOORDELAYS
+//#define DELAYUNITSSTD (10 +EXTRADELAYS + FLOORUNITS)
+//#define NUMDELAYSSTD  (DELAYUNITSSTD * DELAYSPERUNIT)
+//#define FLOORDELAYS 0//PUT min 4, 9, 16, can try more 25, 36, 64 HERE, ensure FLOORDELAYS < 0.5*NUMDELAYSSTD
+//#define SMOOTHINGDELAYS ((EXTRADELAYS * DELAYSPERUNIT) + (FLOORUNITS * DELAYSPERUNIT) - FLOORDELAYS)
+//#define WALLDELAYS (NUMDELAYSSTD - SMOOTHINGDELAYS - FLOORDELAYS)
+//#define TOTALDELAYS (WALLDELAYS + SMOOTHINGDELAYS + FLOORDELAYS)
+#define TOTALDELAYS DELAYSPERUNIT * DELAYUNITSSTD
 #define AUDIOCHANNELS 2
 #define SAMPLINGRATEF 44100.0f
 #define SOUNDSPEED 340.29f
+#define D_PER_SIDE 2
+#define NUMDELAYSSTD TOTALDELAYS
+#define SMOOTHDELAY 1
+
+#define RADIALTRACE (TOTALDELAYS - 2*D_PER_SIDE*D_PER_SIDE)
+
 //#define CENTIMETRESTOMETRES 0.01f
 //#define CENTIMETRESTOMETRESSQ CENTIMETRESTOMETRES*CENTIMETRESTOMETRES
 #define CHANNELS 8
 
-
+using namespace std;
 
 #import <Accelerate/Accelerate.h>
 #import "FirstOrderFilter.h"
 #import "SingleTapDelay.h"
-#import "Point2d.hpp"
+#import "Vector3D.hpp"
 #import "Parameter.hpp"
-#import "RoomRayModel.h"
 #import "Delays.hpp"
+#import "energyTerm.hpp"
 
 
 class FDN
@@ -58,17 +72,51 @@ public:
 
 protected:
     
+    
+    
+    float channelToAngleLeftEar(size_t channel);
+    float channelToAngleRightEar(size_t channel);
+    
+    float gainEyring(int delayTime);
+    
+    // forward declarations
+    void BMFastHadamard16(const float* input, float* output, float* temp16);
+    bool BMPowerOfTwoQ (size_t x);
+    inline void BMFastHadamardTransform(float* input,
+                                        float* output,
+                                        float* temp1,
+                                        float* temp2,
+                                        size_t length);
+    float temp1[TOTALDELAYS];
+    float temp2[TOTALDELAYS];
+    float firstOrderReflectionAttenuation[TOTALDELAYS-SMOOTHDELAY];
+    
+    float totalEnergyAfterAttenuation;
+    energyTerm BRDFenergy;
+    
+    BMMultiTapDelay multiTapDelay;
+    //Setup multiTapDelay values
+    size_t indicesL[TOTALDELAYS/2];
+    size_t indicesR[0];
+    float gainsL[TOTALDELAYS/2];
+    float multiTapGains[TOTALDELAYS/2];
+    float gainsR[0];
+    Vector3D multiDelayLinePoints[TOTALDELAYS/2];
+    size_t multiDelayLinePointsChannel[TOTALDELAYS/2];
+    int multiTapDelayTapsNumber = 0;
+    float multiTapOutputs[TOTALDELAYS/2];
+    bool excessEnergy = false;
+    
+    void  setMultiTapDelayChannels();
+    Cuboid Room;
+    Gains GainValues;
+
+    
     float directAttenuation;
     
-//    bool bouncepointSet = false;
-    void configureRandomModel(float roomSize);
+    double time[30] = {0};
+    int timeindex = 0;
     
-    Delays reverbDelayValues[TOTALDELAYS];
-    Delays RDN[TOTALDELAYS];
-    void shuffleDelays();
-    
-    int additionalSmoothingdelay;
-    RoomRayModel roomRayModel;
     float inputGains[TOTALDELAYS];
     float outputGains[TOTALDELAYS];
     
@@ -78,27 +126,27 @@ protected:
     Parameter newParametersFDN;
     void setParameterSafe(Parameter params);
     
+    void setDelayNoOutputLength();
+    
     float directDelayTimes[2]; //unit = FREQ * seconds
-    Point2d roomBouncePoints[TOTALDELAYS];
-    Point2d rayTraceBP[WALLDELAYS];
+    Vector3D roomBouncePoints[TOTALDELAYS];
+
     size_t delayTimesChannel[TOTALDELAYS];
     
     void setTempPoints();
-    Point2d tempPoints[CHANNELS];
+    Vector3D tempPoints[CHANNELS];
     void calculateAdditionalDelays();
     float additionalDelays[8];
     SingleTapDelay reverbDelays[8];
     void addReverbDelay(float* fdnLeft, float*fdnRight);
-
-    void setDirectGains();
     void setDelayTimes();
-    void setDirectDelayTimes();
-    void sortDelayTimes();
-    void addSmoothingDelayTimes();
+
     
     //To handle direct Rays
     SingleTapDelay directRays[2];
     void setDirectSingleTapDelay();
+    void setDirectGains();
+    void setDirectDelayTimes();
     void processDirectRays(float* input, float* directRaysOutput);
     
     //To do channel angle calculations
@@ -106,7 +154,7 @@ protected:
     void setDirectRayAngles();
     size_t determineChannel(float x, float y);
     size_t angleToChannel(float angleInDegrees);
-    float channelToAngle(size_t channel);
+//    float channelToAngle(size_t channel);
     float channeltoangleNormal(size_t channel);
     //setting tankout of 8 channels
     void processTankOut(float fdnTankOut[CHANNELS]);
@@ -127,7 +175,7 @@ protected:
     float* delayBuffers;
     int delayTimes [TOTALDELAYS];
     int totalDelayTime;
-    int numDelays, delayUnits, numTaps, numUncirculatedTaps;
+    int numDelays, delayUnits;
 	//float feedbackAttenuation[NUMDELAYSSTANDARD];
     //int numDelays, delayUnits, numIndices;
 
@@ -139,15 +187,9 @@ protected:
     float* startIndices[TOTALDELAYS];
     float* endIndices[TOTALDELAYS];
     long samplesUntilNextWrap;
-    //int writeIndex;
-	//int* outTapReadIndices;
-    //int* endIndex;
     float avgDelay;
     
     double gain(double rt60, double delayLengthInSamples);
-
-	// delay times
-	//int delayTimes[NUMDELAYS];
 
     // variables for generating random numbers
 	int rand, randomSeed;
@@ -163,11 +205,9 @@ protected:
     
     float outTapSigns[TOTALDELAYS];
 	float feedbackTapGains[TOTALDELAYS];
-    //float outTapTemp[NUMDELAYSSTANDARD][OUTPUTTAPSPERDELAY];
-    //int fbTapIdxBase[NUMDELAYSSTANDARD];
-	//float predelay;
+
     
-    // temp variables for mixing feedback
+//    // temp variables for mixing feedback
     float ppxxV [DELAYUNITSSTD];
     float xxppV [DELAYUNITSSTD];
     float pnxxV [DELAYUNITSSTD];

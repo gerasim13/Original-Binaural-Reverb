@@ -10,7 +10,7 @@
 #define Delays_hpp
 
 #include <stdio.h>
-#include "Point2d.hpp"
+#include "Vector3D.hpp"
 typedef struct Delays {
     Delays(){
         delay = 0.0f;
@@ -19,7 +19,7 @@ typedef struct Delays {
         outputGainIndex = 0;
         extraDelay = false;
     };
-    Delays(float delay, size_t channel, float inputGain, float outputGain, bool extraDelay, Point2d bp){
+    Delays(float delay, size_t channel, float inputGain, float outputGain, bool extraDelay, Vector3D bp){
         this->delay = delay;
         this->channel = channel;
         this->inputGainIndex = inputGain;
@@ -33,7 +33,7 @@ typedef struct Delays {
     float inputGainIndex;
     float outputGainIndex;
     bool extraDelay;
-    Point2d bp;
+    Vector3D bp;
     bool operator < (const Delays &d) const{
         return (this->delay < d.delay);
     }

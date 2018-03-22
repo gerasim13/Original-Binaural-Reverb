@@ -39,7 +39,8 @@ static int kInputChannelsChangedContext;
     bool ssLock;
     float rSize;
     float rt60Val;
-    float wRatio;
+    float width;
+    float length;
     
     bool reverbOn;
     bool directOn;
@@ -88,8 +89,9 @@ static int kInputChannelsChangedContext;
     self.number = 1.0f;
     
     
-    rSize = 0.15f;
-    wRatio = INITIALWIDTHRATIO;
+    rSize = INITIALROOMSIZE;
+    width = INITIALWIDTH;
+    length = INITIALLENGTH;
     rt60Val = INITIALRT60;
     
     autoSoundMove = false;
@@ -105,7 +107,7 @@ static int kInputChannelsChangedContext;
     Listener = [UIButton buttonWithType:UIButtonTypeCustom];
     [Listener addTarget:self action:@selector(listenerTouched:withEvent:) forControlEvents:UIControlEventTouchDragInside|UIControlEventTouchDragOutside];
     [Listener addTarget:self action:@selector(listenerTouchedEnds:withEvent:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
-    [Listener setFrame:CGRectMake(self.tableView.bounds.size.width/2-25, 2*self.tableView.bounds.size.width/3, 50, 50)];
+    [Listener setFrame:CGRectMake(self.tableView.bounds.size.width/2, 2*self.tableView.bounds.size.width/3, 50, 50)];
     UIImage *listenerImage = [UIImage imageNamed:@"person.png"];
     [Listener setImage:listenerImage forState:UIControlStateNormal];
     
@@ -113,7 +115,7 @@ static int kInputChannelsChangedContext;
     [SoundSource addTarget:self action:@selector(soundSourceTouched:withEvent:) forControlEvents:UIControlEventTouchDragInside| UIControlEventTouchDragOutside];
     [SoundSource addTarget:self action:@selector(soundSourceTouchedEnds:withEvent:) forControlEvents:UIControlEventTouchUpOutside | UIControlEventTouchUpInside];
     
-    [SoundSource setFrame:CGRectMake(self.tableView.bounds.size.width/2-25, self.tableView.bounds.size.width/3, 50, 50)];
+    [SoundSource setFrame:CGRectMake(self.tableView.bounds.size.width/2, self.tableView.bounds.size.width/3, 50, 50)];
     UIImage *soundSourceImage = [UIImage imageNamed:@"Speaker.png"];
     UIImage *soundSourceImageTouched = [UIImage imageNamed:@"SpeakerTouched.png"];
     [SoundSource setImage:soundSourceImage  forState:UIControlStateNormal];
@@ -138,7 +140,7 @@ static int kInputChannelsChangedContext;
     _loop3.loop = YES;
     
     
-    self.loop4 = [AEAudioFilePlayer audioFilePlayerWithURL:[[NSBundle mainBundle] URLForResource:@"flute_music" withExtension:@"wav"] error:NULL];
+    self.loop4 = [AEAudioFilePlayer audioFilePlayerWithURL:[[NSBundle mainBundle] URLForResource:@"guitarAcoustic" withExtension:@"m4a"] error:NULL];
     _loop4.volume = 1.0;
     _loop4.channelIsMuted = YES;
     _loop4.loop = YES;
@@ -271,7 +273,7 @@ static int kInputChannelsChangedContext;
             return 4;
             
         case 2:
-            return 5;
+            return 6;
             
         case 3:
             return 4 + (_audioController.numberOfInputChannels > 1 ? 1 : 0);
@@ -392,7 +394,7 @@ static int kInputChannelsChangedContext;
             cell.accessoryView = view;
             switch ( indexPath.row ) {
                 case 0: {
-                    cell.textLabel.text= @"Impulse";
+                    cell.textLabel.text= @"Flamenco Guitar";
                     onSwitch.on = !_loop3.channelIsMuted;
                     slider.value = _loop3.volume;
                     [onSwitch addTarget:self action:@selector(loop3SwitchChanged:) forControlEvents:UIControlEventValueChanged];
@@ -409,7 +411,7 @@ static int kInputChannelsChangedContext;
                 }
                     
                 case 2: {
-                    cell.textLabel.text= @"Flamenco Guitar";
+                    cell.textLabel.text= @"Impulse";
                     onSwitch.on = !_loop1.channelIsMuted;
                     slider.value = _loop1.volume;
                     [onSwitch addTarget:self action:@selector(loop1SwitchChanged:) forControlEvents:UIControlEventValueChanged];
@@ -418,7 +420,7 @@ static int kInputChannelsChangedContext;
                 }
                     
                 case 3: {
-                    cell.textLabel.text= @"Flute";
+                    cell.textLabel.text= @"Guitar Acoustic";
                     onSwitch.on = !_loop4.channelIsMuted;
                     slider.value = _loop4.volume;
                     [onSwitch addTarget:self action:@selector(loop4SwitchChanged:) forControlEvents:UIControlEventValueChanged];
@@ -434,19 +436,20 @@ static int kInputChannelsChangedContext;
             cell.accessoryView = [[UISwitch alloc] initWithFrame:CGRectZero];
             
             switch ( indexPath.row ) {
-                case 0: {
-                    cell.textLabel.text = @"AutoSoundMove";
-                    ((UISwitch*)cell.accessoryView).on = _limiter != nil;
-                    [((UISwitch*)cell.accessoryView) addTarget:self action:@selector(limiterSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+                case 5: {
+                    cell.textLabel.text = @"Input Playthrough";
+                    ((UISwitch*)cell.accessoryView).on = _playthrough != nil;
+                    [((UISwitch*)cell.accessoryView) addTarget:self action:@selector(playthroughSwitchChanged:) forControlEvents:UIControlEventValueChanged];
                     break;
+
                 }
-                case 1: {
+                case 0: {
                     cell.textLabel.text = @"Reverb";
                     ((UISwitch*)cell.accessoryView).on = _reverbBlock != nil;
                     [((UISwitch*)cell.accessoryView) addTarget:self action:@selector(reverbSwitchChanged:) forControlEvents:UIControlEventValueChanged];
                     break;
                 }
-                case 2: {
+                case 1: {
                     cell.textLabel.text = @"Room Size";
                     UISlider *roomSizeSlider = [[UISlider alloc] initWithFrame:CGRectMake(0, 0, 300, 40)];
                     roomSizeSlider.minimumValue = 0.1;
@@ -457,7 +460,7 @@ static int kInputChannelsChangedContext;
                     cell.accessoryView = roomSizeSlider;
                     break;
                 }
-                case 3:{
+                case 2:{
                     cell.textLabel.text= @"RT60 Value";
                     UISlider *rt60Slider = [[UISlider alloc] initWithFrame:CGRectMake(0, 0, 300, 40)];
                     rt60Slider.minimumValue = 0.2f;
@@ -469,16 +472,27 @@ static int kInputChannelsChangedContext;
                     break;
 
                 }
-                case 4:{
-                    cell.textLabel.text= @"widthRatio %";
+                case 3:{
+                    cell.textLabel.text= @"Width %";
                     UISlider *directMix = [[UISlider alloc] initWithFrame:CGRectMake(0, 0, 300, 40)];
                     directMix.minimumValue = 0.1f;
-                    directMix.maximumValue = 0.9f;
-                    directMix.value = wRatio;
+                    directMix.maximumValue = 1.0f;
+                    directMix.value = width;
                     [directMix setContinuous:NO];
-                    [directMix addTarget:self action:@selector(widthRatioSizeChanged:) forControlEvents:UIControlEventValueChanged];
+                    [directMix addTarget:self action:@selector(widthSizeChanged:) forControlEvents:UIControlEventValueChanged];
                     cell.accessoryView = directMix;
                       break;
+                }
+                case 4:{
+                    cell.textLabel.text= @"Length %";
+                    UISlider *directMix = [[UISlider alloc] initWithFrame:CGRectMake(0, 0, 300, 40)];
+                    directMix.minimumValue = 0.1f;
+                    directMix.maximumValue = 1.0f;
+                    directMix.value = length;
+                    [directMix setContinuous:NO];
+                    [directMix addTarget:self action:@selector(lengthSizeChanged:) forControlEvents:UIControlEventValueChanged];
+                    cell.accessoryView = directMix;
+                    break;
                 }
                     
             }
@@ -489,9 +503,9 @@ static int kInputChannelsChangedContext;
             
             switch ( indexPath.row ) {
                 case 0: {
-                    cell.textLabel.text = @"Input Playthrough";
-                    ((UISwitch*)cell.accessoryView).on = _playthrough != nil;
-                    [((UISwitch*)cell.accessoryView) addTarget:self action:@selector(playthroughSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+                    cell.textLabel.text = @"AutoSoundMove";
+                    ((UISwitch*)cell.accessoryView).on = _limiter != nil;
+                    [((UISwitch*)cell.accessoryView) addTarget:self action:@selector(limiterSwitchChanged:) forControlEvents:UIControlEventValueChanged];
                     break;
                 }
                 case 1: {
@@ -612,7 +626,7 @@ static int kInputChannelsChangedContext;
     
     
     Reverb.setSoundLocation(loc);
-     //   printf("Sound location is now : %f %f \n", loc[0], loc[1]);
+        printf("Sound location is now : %f %f \n", loc[0], loc[1]);
     }
 }
 
@@ -636,6 +650,7 @@ static int kInputChannelsChangedContext;
     }
     sender.center = point;
     }
+    
 }
 - (CGFloat) tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
 {
@@ -721,10 +736,15 @@ static int kInputChannelsChangedContext;
     rt60Val = slider.value;
 }
 
-- (void) widthRatioSizeChanged: (UISlider*) slider{
-    Reverb.setWidthRatio(slider.value);
+- (void) widthSizeChanged: (UISlider*) slider{
+    Reverb.setWidth(slider.value);
     printf("Width Ratio is now : %f \n", slider.value);
-    wRatio = slider.value;
+    width = slider.value;
+}
+- (void) lengthSizeChanged: (UISlider*) slider{
+    Reverb.setLength(slider.value);
+    printf("Width Ratio is now : %f \n", slider.value);
+    length = slider.value;
 }
 
 

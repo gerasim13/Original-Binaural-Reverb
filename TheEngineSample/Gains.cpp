@@ -101,20 +101,20 @@ void Gains::monteCarloBeta(Vector3D *points, Vector3D L, Vector3D S, Vector3D N,
     
 }
 
-float Gains::phongBRDF(Vector3D S, Vector3D L, Vector3D N){
-
-    float cosAlpha = getDirectionVector(S, N).normalize().dotProduct(N);
-    if(cosAlpha < 0.0f){
-        cosAlpha = 0.0f;
-    }
-    
-    float n = NSPECULAR;
-    
-    float normalisationEnergy = lookUpNormalizationEnergyTerm(S);
-    
-   // return (kD * 1.f/M_PI) + kS * (n+2.f)/(2*M_PI) * powf(cosAlpha, n);
-        return (KD * 1.f/(M_PI))* ENERGYREDUCTIONDIF  + normalisationEnergy * powf(cosAlpha, n) * KS;
-}
+//float Gains::phongBRDF(Vector3D S, Vector3D L, Vector3D N){
+//
+//    float cosAlpha = getDirectionVector(S, N).normalize().dotProduct(N);
+//    if(cosAlpha < 0.0f){
+//        cosAlpha = 0.0f;
+//    }
+//    
+//    float n = NSPECULAR;
+//    
+//    float normalisationEnergy = lookUpNormalizationEnergyTerm(S);
+//    
+//   // return (kD * 1.f/M_PI) + kS * (n+2.f)/(2*M_PI) * powf(cosAlpha, n);
+//        return (KD * 1.f/(M_PI))* ENERGYREDUCTIONDIF  + normalisationEnergy * powf(cosAlpha, n) * KS;
+//}
 
 
 Vector3D Gains::getDirectionVector(Vector3D S, Vector3D N){
@@ -229,26 +229,26 @@ void Gains::cartesianToSpherical(Vector3D x, float *angles){
     angles[1] = acosf(x.normalize().x / sqrtf(powf(x.normalize().x, 2)+ powf(x.normalize().x, 2)));
 }
 
-float Gains::lookUpNormalizationEnergyTerm(Vector3D S){
-    
-    
-    //get the theta
-    float* angles = new float[2];
-    cartesianToSpherical(S, angles);
-    
-
-    
-    int numberbinsTheta = THETASEGMENTATION;
-
-    
-
-    //check the bin
-
-    int quotientTheta = floorf(angles[0] / (M_PI/2.0f/float(numberbinsTheta))) ;
-
-    
-    
-    return brdfPhong.SpecularBRDFnormalization[quotientTheta];
-
-}
+//float Gains::lookUpNormalizationEnergyTerm(Vector3D S){
+//    
+//    
+//    //get the theta
+//    float* angles = new float[2];
+//    cartesianToSpherical(S, angles);
+//    
+//
+//    
+//    int numberbinsTheta = THETASEGMENTATION;
+//
+//    
+//
+//    //check the bin
+//
+//    int quotientTheta = floorf(angles[0] / (M_PI/2.0f/float(numberbinsTheta))) ;
+//
+//    
+//    
+//    return brdfPhong.SpecularBRDFnormalization[quotientTheta];
+//
+//}
 

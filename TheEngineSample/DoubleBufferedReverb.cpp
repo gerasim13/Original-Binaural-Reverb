@@ -70,8 +70,8 @@ void DoubleBufferedReverb::updateReverbSettings(){
 }
 
 void DoubleBufferedReverb::setListenerLocation(float* loc){
-    Point2d Ratio = Point2d(loc[0],1.0f-loc[1]);
-    printf("loc of listener is: %f %f \n", Ratio.x, Ratio.y);
+    Vector3D Ratio = Vector3D(loc[0],1.0f-loc[1]);
+    printf("Ratio of listener is: %f %f \n", Ratio.x, Ratio.y);
     this->parameters.setListenerLocation(Ratio);
     updateReverbSettings();
     usleep(200000);
@@ -80,9 +80,9 @@ void DoubleBufferedReverb::setListenerLocation(float* loc){
 }
 
 void DoubleBufferedReverb::setSoundLocation(float* loc){
-    Point2d Ratio = Point2d(loc[0],1.0f-loc[1]);
+    Vector3D Ratio = Vector3D(loc[0],1.0f-loc[1]);
     this->parameters.setSoundLocation(Ratio);
-    printf("loc of sound is: %f %f \n", Ratio.x, Ratio.y);
+    printf("Ratio of sound is: %f %f \n", Ratio.x, Ratio.y);
     updateReverbSettings();
     usleep(200000);
     flip();
@@ -90,10 +90,10 @@ void DoubleBufferedReverb::setSoundLocation(float* loc){
 
 
 void DoubleBufferedReverb::setSoundAndListenerLocation(float* locL, float* locS){
-    Point2d RatioL = Point2d(locL[0],1.0f-locL[1]);
+    Vector3D RatioL = Vector3D(locL[0],1.0f-locL[1]);
   //  printf("loc of listener is: %f %f \n", RatioL.x, RatioL.y);
     this->parameters.setListenerLocation(RatioL);
-    Point2d RatioS = Point2d(locS[0],1.0f-locS[1]);
+    Vector3D RatioS = Vector3D(locS[0],1.0f-locS[1]);
   //  printf("loc of sound is: %f %f \n", RatioS.x, RatioS.y);
     this->parameters.setSoundLocation(RatioS);
     updateReverbSettings();
@@ -108,8 +108,14 @@ void DoubleBufferedReverb::setRoomSize(float size){
     flip();
 }
 
-void DoubleBufferedReverb::setWidthRatio(float widthRatio){
-    this->parameters.setWidthRatio(widthRatio);
+void DoubleBufferedReverb::setWidth(float widthRatio){
+    this->parameters.setWidth(widthRatio);
+    updateReverbSettings();
+    usleep(200000);
+    flip();
+}
+void DoubleBufferedReverb::setLength(float ratio){
+    this->parameters.setLength(ratio);
     updateReverbSettings();
     usleep(200000);
     flip();

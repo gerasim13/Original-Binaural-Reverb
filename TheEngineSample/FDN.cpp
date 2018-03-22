@@ -4,6 +4,306 @@
 #include <cstring>
 #include <assert.h>
 #include <random>
+#include "Cuboid.hpp"
+#include "Gains.hpp"
+#include <stdlib.h>     /* srand, rand */
+#include <random>
+
+
+void FDN::setParameterSafe(Parameter params)
+{
+    
+    clock_t begin = clock();
+    
+    
+    parametersFDN = newParametersFDN;
+    reverbOn = parametersFDN.roomSize > 0.05;
+    
+    printf("RT60: %f, room width : %f, room length : %f roomHeight: %f\n", parametersFDN.RT60, parametersFDN.roomWidth, parametersFDN.roomHeight, parametersFDN.roomCeiling);
+    printf("Listenerloc : %f %f ssloc : %f %f \n", parametersFDN.listenerLoc.x, parametersFDN.listenerLoc.y, parametersFDN.soundSourceLoc.x, parametersFDN.soundSourceLoc.y);
+    
+    randomSeed = 0; // reset the seed every time for consistent results
+    
+    // this is required to keep the mixing matrices unitary
+    matrixAttenuation = 1.0/sqrt((float)DELAYSPERUNIT);
+
+    Room = Cuboid(parametersFDN.roomWidth, parametersFDN.roomHeight, parametersFDN.roomCeiling);
+    
+    
+//    Room.segmentCube(4 * 4); //even segmentation
+    
+    //Approximately radial segmentation
+//    Room.segmentCubeBasedOnProjectedArea(TOTALDELAYS-SMOOTHDELAY, parametersFDN.soundSourceLoc, parametersFDN.listenerLoc);
+    Room.sliceCube(TOTALDELAYS-SMOOTHDELAY);
+    //Set delay times
+    Room.getDelayValues(delayTimes, parametersFDN.listenerLoc, parametersFDN.soundSourceLoc, SAMPLE_RATE_F);
+    
+    printf("Room elements %d \n", Room.elements);
+    resetTapAttenuation(parametersFDN.RT60);
+    GainValues = Gains(DMIN, Room.elements, Room.area, feedbackTapGains);
+    
+//    GainValues.brdfPhong = BRDFenergy;
+    
+    float insufficiency = GainValues.calculateGains(Room.segmentedSides, parametersFDN.listenerLoc, parametersFDN.soundSourceLoc);
+    
+    
+    GainValues.getGains(inputGains, outputGains);
+
+    
+
+    //set the delay channel of the multitap too
+    
+    totalEnergyAfterAttenuation = GainValues.totalInputEnergy;
+    
+//    //Doing first order reflection Attenuation
+//    for (int i = 0; i< TOTALDELAYS-SMOOTHDELAY; i++){
+//        firstOrderReflectionAttenuation[i] = 1.0f;
+//       // firstOrderReflectionAttenuation[i] = gain(parametersFDN.RT60, delayTimes[i]);
+//        //printf("i: %d First order reflection attenuation from jot : %f  from eyring: %f \n", i, firstOrderReflectionAttenuation[i], gainEyring(delayTimes[i]));
+//    }
+//    
+//    //Adjust the beta
+//    float totalAttenuatedEnergy = 0;
+//    float totalEnergy = 0;
+//    for (int i = 0; i<TOTALDELAYS-SMOOTHDELAY; i++){
+//        totalAttenuatedEnergy += firstOrderReflectionAttenuation[i] * GainValues.beta[i] * firstOrderReflectionAttenuation[i] * GainValues.beta[i];
+//        
+//        totalEnergy += GainValues.beta[i] * GainValues.beta[i];
+//        
+//    }
+//    
+//    float attenuationConstant = sqrtf(totalAttenuatedEnergy/totalEnergy);
+//    
+//    printf("Attenuation constant: %f \n",attenuationConstant);
+//    
+//    //adjust mu
+//   totalEnergyAfterAttenuation = 0;
+//    for (int i = 0; i<TOTALDELAYS-SMOOTHDELAY; i++){
+//      //  printf("Gainvalues mu%f \n", GainValues.mu[i]);
+//        inputGains[i] = inputGains[i] * attenuationConstant;
+//        totalEnergyAfterAttenuation += inputGains[i] * inputGains[i];
+//    }
+//    
+//    
+//    //adjust correct energy
+//    GainValues.correctInputEnergy = totalAttenuatedEnergy/totalEnergy * GainValues.correctInputEnergy;
+//    
+//    printf("New correct energy: %f \n", GainValues.correctInputEnergy);
+   // GainValues.totalInputEnergy = totalEnergyAfterAttenuation;
+    
+    insufficiency = GainValues.correctInputEnergy - totalEnergyAfterAttenuation;
+    
+    printf("New input energy after attenuation before adjustment, %f \n", totalEnergyAfterAttenuation);
+    
+    setDelayChannels();
+    setDelayNoOutputLength();
+
+    
+    
+    //Handle energy excess or insufficiency here
+    if (insufficiency > 0.0f){
+        //set the mu of the last delay (delay no output) to top up to the energy
+        float inputEnergyNoOutputDelayLine = insufficiency + ((float)TOTALDELAYS/float(TOTALDELAYS-SMOOTHDELAY) * GainValues.correctInputEnergy) - GainValues.correctInputEnergy;
+        printf("Input energy to top up : %f \n", inputEnergyNoOutputDelayLine);
+        float muOnNoOutputDelayLine = sqrtf(inputEnergyNoOutputDelayLine/SMOOTHDELAY);
+        
+        for (int l = TOTALDELAYS-SMOOTHDELAY; l<TOTALDELAYS; l++){
+        inputGains[l] = muOnNoOutputDelayLine;
+        }
+
+        
+    }
+    
+
+    
+    else if (insufficiency == 0.0f){
+        float inputEnergyOnThisDelayLine = ((float)TOTALDELAYS / float(TOTALDELAYS-SMOOTHDELAY) * GainValues.correctInputEnergy)  - GainValues.correctInputEnergy;
+        float muOnThisDelayLine = sqrtf(inputEnergyOnThisDelayLine);
+        inputGains[TOTALDELAYS-SMOOTHDELAY] = muOnThisDelayLine;
+    }
+    
+    else if (insufficiency < 0.0f){
+        excessEnergy = true;
+        float currentInputEnergy = totalEnergyAfterAttenuation;
+        
+        int multiTapIndex = 0;
+        
+        while (currentInputEnergy > GainValues.correctInputEnergy){
+            
+            float maxInGain = 0.0f;
+            float maxInGainSq = 0.0f;
+            int indexMaxInGain = 0;
+            
+            for (int i = 0; i<TOTALDELAYS-SMOOTHDELAY; i++){
+                if (inputGains[i] * inputGains[i] > maxInGainSq){
+                    maxInGain = inputGains[i];
+                    maxInGainSq = inputGains[i] * inputGains[i];
+                    indexMaxInGain = i;
+                }
+            }
+            
+            printf("Index : %d caused excess, delay length: %d, removing this\n", indexMaxInGain, delayTimes[indexMaxInGain]);
+            
+            size_t dVal = delayTimes[indexMaxInGain];
+            indicesL[multiTapIndex] = dVal;
+            float betaVal = inputGains[indexMaxInGain] * outputGains[indexMaxInGain];
+            gainsL[multiTapIndex] = betaVal;
+            printf("Sides number %d with area %f \n", indexMaxInGain, Room.segmentedSides[indexMaxInGain].getArea());
+            multiDelayLinePoints[multiTapIndex] = Room.segmentedSides[indexMaxInGain].getMidpoint();
+            multiTapGains[multiTapIndex] =  gain(parametersFDN.RT60, delayTimes[indexMaxInGain]);
+            
+            //transform this into no inputGain
+            inputGains[indexMaxInGain] = 0.0f;
+            
+            
+            //recalculate total energy
+            float newInputEnergy = 0.0f;
+            for (int i = 0; i< TOTALDELAYS-SMOOTHDELAY; i++){
+                newInputEnergy += inputGains[i] * inputGains[i];
+            }
+            
+            
+
+            currentInputEnergy = newInputEnergy;
+            multiTapIndex++;
+
+        }
+        
+        multiTapDelayTapsNumber = multiTapIndex;
+        
+        //recalculate total energy
+        float newInputEnergy = 0.0f;
+        for (int i = 0; i< TOTALDELAYS; i++){
+            newInputEnergy += inputGains[i] * inputGains[i];
+        }
+        
+        printf("New input Energy after take off the excess: %f \n" , newInputEnergy);
+        //adjust the value of noOutputGain
+        float insufficientEnergyDueToRemoval = (GainValues.correctInputEnergy - currentInputEnergy);
+        float inputEnergyNoOutputDelayLine = insufficientEnergyDueToRemoval + (((float)(TOTALDELAYS)/(float)(TOTALDELAYS-SMOOTHDELAY)) * GainValues.correctInputEnergy) - GainValues.correctInputEnergy;
+        
+        
+        float muOnNoOutputDelayLine = sqrtf(inputEnergyNoOutputDelayLine/SMOOTHDELAY);
+        for (int l = TOTALDELAYS-SMOOTHDELAY; l<TOTALDELAYS; l++){
+            inputGains[l] = muOnNoOutputDelayLine;
+        }
+//        
+//        inputGains[TOTALDELAYS-SMOOTHDELAY] = muOnNoOutputDelayLine;
+    }
+    
+    //recalculate total energy
+    float newTotalInputEnergy = 0.0f;
+    for (int i = 0; i< TOTALDELAYS; i++){
+        newTotalInputEnergy += inputGains[i] * inputGains[i];
+    }
+    
+    printf("Previous totalEnergy: %f, New total input energy: %f, correct energy: %f, effectiveEnergy: %f \n", GainValues.totalInputEnergy, newTotalInputEnergy, GainValues.correctInputEnergy, newTotalInputEnergy * (float)(TOTALDELAYS-SMOOTHDELAY)/(TOTALDELAYS));
+    
+//
+//    for (int i = 1; i< TOTALDELAYS; i++){
+//        printf("Delay times :%d \n", delayTimes[i]);
+//    }
+    
+//    * @param stereo    is it stereo (true) or mono (false). Mono uses Left only
+//    * @param indicesL  array of delay tap times in samples, left channel / mono
+//    * @param indicesR  array of delay tap times in samples, right channel
+//    * @param gainsL    array of output tap gains for left channel or mono
+//        * @param gainsR    array of output tap gains for right channel
+//            * @param numTapsL  length of gainsL and indicesL
+//            * @param numTapsR  length of gainsR and indicesR
+    
+    //Initialize the multi-tap delay
+    
+    if (excessEnergy){
+        BMMultiTapDelay_init(&multiTapDelay, false, indicesL, indicesR, gainsL, gainsR, multiTapDelayTapsNumber,0);
+        
+        setMultiTapDelayChannels();
+    }
+    
+//    for (int i = 1; i< TOTALDELAYS; i++){
+//        printf("Delay times :%d \n", delayTimes[i]);
+//    }
+    
+    
+//
+//    float output = 0.0f;
+
+//    
+    //Init multitap delay
+//    
+//    void BMMultiTapDelay_init(BMMultiTapDelay* This,
+//                              bool stereo,
+//                              size_t* indicesL,
+//                              size_t* indicesR,
+//                              float* gainsL,
+//                              float* gainsR,
+//                              size_t numTapsL,
+//                              size_t numTapsR);
+
+    
+    setDirectDelayTimes();
+    setDirectGains();
+
+    setDirectRayAngles();
+    
+    
+//    for (int i = 1; i< TOTALDELAYS; i++){
+//        printf("Delay times :%d \n", delayTimes[i]);
+//    }
+    
+    setTempPoints();
+    calculateAdditionalDelays();
+    
+    
+    
+    setDirectSingleTapDelay();
+    
+    
+    setFilters();
+    
+
+    
+    int totalDelayTime = 0;
+    for(int i = 0; i < numDelays; i++) totalDelayTime += delayTimes[i];
+    
+
+
+    
+    printf("totaldelay  %d \n ", totalDelayTime);
+    resetDelay(totalDelayTime);
+    resetReadIndices();
+    
+    setHFDecayMultiplier(1000,1.0f,parametersFDN.RT60);
+    
+
+
+
+    
+    
+//    printf("Printing Parameters: \n");
+//    
+//    for (int i = 0 ; i < numDelays ; i++){
+//        printf("Index : %d, delay : %d, inputGain : %f, outputGain: %f \n",i, delayTimes[i], inputGains[i], outputGains[i]);
+//        
+//
+//        
+//    }
+    
+    clock_t end = clock();
+    
+    double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
+    printf("Time elapsed: %f\n", elapsed_secs);
+    time[timeindex] = elapsed_secs;
+    timeindex++;
+    
+    if (timeindex > 30){
+        timeindex = 0;
+    }
+    
+    
+    printf("\n\n======Setting End=======\n\n");
+    //        printf("DA %f \n", directAttenuation);
+}
 
 // this is the function we call to process the audio from iFretless.
 void  FDN::processIFretlessBuffer(float* input, size_t numFrames, float* outputL, float* outputR)
@@ -51,37 +351,36 @@ inline void FDN::processReverb(float* pInput, float* pOutputL, float* pOutputR)
     
     // copy the filtered input so that we can process it without affecting the original value
     float xn = *pInput;
-    float fdnTankOutsNew[CHANNELS] = {};
+    float fdnTankOutsNew[CHANNELS] = {0};
     float directRaysOutput[2] = { xn *directAttenuation, xn *directAttenuation };
    // printf("%f \n", directAttenuation);
+    
+    
     // copy output taps to pre-filtered output buffer
     //rwIndices are output taps pointer
     
-    vDSP_vgathra (const_cast<const float**>(rwIndices), 1, outputsPF, 1, numTaps);
+    vDSP_vgathra (const_cast<const float**>(rwIndices), 1, outputsPF, 1, numDelays);
     
     // scale the output taps according to the feedBackTapGains
-    vDSP_vmul(feedbackTapGains, 1, outputsPF, 1, outputsPF, 1, numTaps);
-    // vDSP_vsmul(outputsPF, 1, &parametersFDN.reflection, outputsPF, 1, numTaps);
-    
-    
-    // apply a first order high-shelf filter to the feedback path
-    //
-    // This filter structure is direct form 2 from figure 14 in section 1.1.6
-    // of Digital Filters for Everyone by Rusty Alred, second ed.
-    //
-    // t = outputsPF + (a1 * z1);
-    
-    vDSP_vma (a1, 1, z1, 1, outputsPF + numUncirculatedTaps, 1, t, 1, numDelays);
-    // outputsAF = b0*t + b1*z1;
-    vDSP_vmma(b0, 1, t, 1, b1, 1, z1, 1, outputsAF + numUncirculatedTaps, 1, numDelays);
-    
+    vDSP_vmul(feedbackTapGains, 1, outputsPF, 1, outputsPF, 1, numDelays);
     
     //Processing outputs
-    vDSP_vmul(outputGains, 1, outputsAF, 1, outputsBinaural, 1, numTaps);
+    vDSP_vmul(outputGains, 1, outputsPF, 1, outputsBinaural, 1, numDelays);
 
-    //TODO swap delay and HRTF for direct
-
-    processTankOut(fdnTankOutsNew); //convert to 8 channels from outputTaps
+    if (excessEnergy){
+    //get output from multiTaps
+    BMMultiTapDelay_processMultiChannelOut(&multiTapDelay, xn, multiTapOutputs);
+        
+    vDSP_vmul(multiTapGains, 1, multiTapOutputs, 1, multiTapOutputs, 1, multiTapDelayTapsNumber);
+    
+    //add the output from multiTaps to tankout
+    for (int i = 0; i<multiTapDelayTapsNumber; i++){
+        size_t channel = multiDelayLinePointsChannel[i];
+        fdnTankOutsNew[channel] += multiTapOutputs[i];
+    }
+    }
+    
+    processTankOut(fdnTankOutsNew); //convert to 8 channels from outputsBinaural
     
     float fdnTankOutLeft[CHANNELS] = {};
     float fdnTankOutRight[CHANNELS] = {};
@@ -93,15 +392,33 @@ inline void FDN::processReverb(float* pInput, float* pOutputL, float* pOutputR)
     vDSP_sve(fdnTankOutLeft, 1, &reverbOut[0], CHANNELS);
     vDSP_sve(fdnTankOutRight, 1, &reverbOut[1], CHANNELS);
 
-    *pOutputL = (directRaysOutput[0]*directPortionOn - reverbOut[0]*reverbPortionOn);
-    *pOutputR = (directRaysOutput[1]*directPortionOn - reverbOut[1]*reverbPortionOn);
+    *pOutputL = (directRaysOutput[0]*directPortionOn + reverbOut[0]*reverbPortionOn);
+    *pOutputR = (directRaysOutput[1]*directPortionOn + reverbOut[1]*reverbPortionOn);
     
     //Continue processing reverb
+
+    // vDSP_vsmul(outputsPF, 1, &parametersFDN.reflection, outputsPF, 1, numTaps);
+    
+    
+
+    // apply a first order high-shelf filter to the feedback path
+    //
+    // This filter structure is direct form 2 from figure 14 in section 1.1.6
+    // of Digital Filters for Everyone by Rusty Alred, second ed.
+    //
+    // t = outputsPF + (a1 * z1);
+    
+    vDSP_vma (a1, 1, z1, 1, outputsPF , 1, t, 1, numDelays);
+    // outputsAF = b0*t + b1*z1;
+    vDSP_vmma(b0, 1, t, 1, b1, 1, z1, 1, outputsAF , 1, numDelays);
+    
     // z1 = t;
     memcpy(z1, t, numDelays * sizeof(float));
     
     // apply the matrix attenuation before mixing
-    vDSP_vsmul (outputsAF+numUncirculatedTaps, 1, &matrixAttenuation, outputsAF+numUncirculatedTaps, 1, numDelays);
+    vDSP_vsmul (outputsAF, 1, &matrixAttenuation, outputsAF, 1, numDelays);
+    
+    BMFastHadamardTransform(outputsAF, inputs, temp1, temp2, TOTALDELAYS);
     
     // process mixing matrices
     //if (DELAYSPERUNIT == 4) {
@@ -127,24 +444,27 @@ inline void FDN::processReverb(float* pInput, float* pOutputL, float* pOutputR)
     //    pnxx = outputsAF[i + 0] - outputsAF[i + 1];
     //    xxpn = outputsAF[i + 2] - outputsAF[i + 3];
     //
-    //  Here's a vectorised version of the code in the comment above:
-    vDSP_vadd(outputsAF + 0 + numUncirculatedTaps, 4, outputsAF + 1 + numUncirculatedTaps, 4, ppxxV, 1, delayUnits);
-    vDSP_vadd(outputsAF + 2 + numUncirculatedTaps, 4, outputsAF + 3 + numUncirculatedTaps, 4, xxppV, 1, delayUnits);
-    vDSP_vsub(outputsAF + 0 + numUncirculatedTaps, 4, outputsAF + 1 + numUncirculatedTaps, 4, pnxxV, 1, delayUnits);
-    vDSP_vsub(outputsAF + 2 + numUncirculatedTaps, 4, outputsAF + 3 + numUncirculatedTaps, 4, xxpnV, 1, delayUnits);
-    //
-    //  inputs[j + 0] += ppxx + xxpp;
-    //  inputs[j + 1] += ppxx - xxpp;
-    //  inputs[j + 2] += pnxx + xxpn;
-    //  inputs[j + 3] += pnxx - xxpn;
-    // }
-    // Here's the vectorised version:
-    vDSP_vadd(ppxxV, 1, xxppV, 1, inputs+0, 4, delayUnits);
-    vDSP_vsub(ppxxV, 1, xxppV, 1, inputs+1, 4, delayUnits);
-    vDSP_vadd(pnxxV, 1, xxpnV, 1, inputs+2, 4, delayUnits);
-    vDSP_vsub(pnxxV, 1, xxpnV, 1, inputs+3, 4, delayUnits);
-    //} else { // if DELAYSPERUNIT != 4, i.e. 2x2 mixing
     
+//    //replaced with hadamard
+//    //  Here's a vectorised version of the code in the comment above:
+//    vDSP_vadd(outputsAF + 0 , 4, outputsAF + 1 , 4, ppxxV, 1, delayUnits);
+//    vDSP_vadd(outputsAF + 2 , 4, outputsAF + 3 , 4, xxppV, 1, delayUnits);
+//    vDSP_vsub(outputsAF + 0 , 4, outputsAF + 1 , 4, pnxxV, 1, delayUnits);
+//    vDSP_vsub(outputsAF + 2 , 4, outputsAF + 3 , 4, xxpnV, 1, delayUnits);
+//    //
+//    //  inputs[j + 0] += ppxx + xxpp;
+//    //  inputs[j + 1] += ppxx - xxpp;
+//    //  inputs[j + 2] += pnxx + xxpn;
+//    //  inputs[j + 3] += pnxx - xxpn;
+//    // }
+//    // Here's the vectorised version:
+//    vDSP_vadd(ppxxV, 1, xxppV, 1, inputs+0, 4, delayUnits);
+//    vDSP_vsub(ppxxV, 1, xxppV, 1, inputs+1, 4, delayUnits);
+//    vDSP_vadd(pnxxV, 1, xxpnV, 1, inputs+2, 4, delayUnits);
+//    vDSP_vsub(pnxxV, 1, xxpnV, 1, inputs+3, 4, delayUnits);
+//    //} else { // if DELAYSPERUNIT != 4, i.e. 2x2 mixing
+//    
+
     // mixing in 2x2 matrices
     //for (i = 0; i < NUMDELAYS; i+= 2) {
     //    float a = outputsAF[i];
@@ -159,18 +479,203 @@ inline void FDN::processReverb(float* pInput, float* pOutputL, float* pOutputR)
     
     // scale and mix new input together with feedback input
     float scaledInput[TOTALDELAYS] = {};
+    
+    //Uncomment this  and comment the next two lines if you just want to check FOR
+     //   vDSP_vsmul(inputGains, 1, &xn, inputs, 1, numDelays);
     vDSP_vsmul(inputGains, 1, &xn, scaledInput, 1, numDelays);
+    
     vDSP_vadd(inputs, 1, scaledInput, 1, inputs, 1, numDelays);
     
     // feedback the mixed audio into the tank, shifting the feedback path over to the next unit
     size_t j;//,k;
-    for (j = DELAYSPERUNIT; j < numDelays; j++) *(rwIndices[j+ numUncirculatedTaps]) = inputs[j-DELAYSPERUNIT];
-    for (j = 0;j<DELAYSPERUNIT; j++) *(rwIndices[j+ numUncirculatedTaps]) = inputs[j+numDelays-DELAYSPERUNIT];
-    //for (j = 0; j < numDelays; j++) *(rwIndices[j+ numUncirculatedTaps]) = inputs[j];
+    for (j = DELAYSPERUNIT; j < numDelays; j++) *(rwIndices[j]) = inputs[j-DELAYSPERUNIT];
+    for (j = 0;j<DELAYSPERUNIT; j++) *(rwIndices[j]) = inputs[j+numDelays-DELAYSPERUNIT];
+  //  for (j = 0; j < numDelays; j++) *(rwIndices[j]) = inputs[j];
     
     incrementIndices();
 }
 
+
+/*!
+ * Fast Hadamard Transform
+ *   works in place
+ *
+ * @param input   an array of floats with length = length
+ * @param output  an array of floats with length = length
+ * @param temp1   an array of floats with length = length (temp buffer)
+ * @param temp2   an array of floats with length = length (temp buffer)
+ * @param length  must be a power of 2, >= 16
+ */
+inline void FDN::BMFastHadamardTransform(float* input,
+                                    float* output,
+                                    float* temp1,
+                                    float* temp2,
+                                    size_t length){
+    // length must be a power of 2
+    assert(BMPowerOfTwoQ(length));
+    // length must be at least 16 because we hard-code the
+    // base case at order 16.
+    assert(length >= 16);
+    
+    size_t partitionSize = length;
+    float* tmpIn = input;
+    float* tmpOut = temp1;
+    bool tmpState = true;
+    
+    // iteratively calculated recursion
+    while (partitionSize > 16) {
+        size_t halfPartitionSize = partitionSize >> 1;
+        for (size_t i = 0; i < length; i += partitionSize){
+            // copy all the lower terms into place
+            memcpy(tmpOut+i,tmpIn+i,sizeof(float)*halfPartitionSize);
+            memcpy(tmpOut+i+halfPartitionSize,tmpIn+i,sizeof(float)*halfPartitionSize);
+            // sum all the higher terms into place
+            for (size_t j=i; j<halfPartitionSize+i; j++) {
+                size_t idx2 = j+halfPartitionSize;
+                tmpOut[j] += tmpIn[idx2];
+                tmpOut[idx2] -= tmpIn[idx2];
+            }
+        }
+        
+        // swap temp buffers to avoid using the same memory for reading and writing.
+        tmpIn = tmpOut;
+        tmpState = !tmpState;
+        if (tmpState) tmpOut = temp1;
+        else tmpOut = temp2;
+        partitionSize >>= 1;
+    }
+    
+    // base case
+    for (size_t i = 0; i < length; i += 16)
+        BMFastHadamard16(tmpIn + i, output + i, tmpOut);
+}
+
+
+
+
+/*
+ * Fast Hadamard transform of length 16
+ *   works in place.
+ *
+ * @param input   an array of 16 floats
+ * @param output  an array of 16 floats
+ * @param temp16  an array of 16 floats that will be over-written
+ *
+ */
+inline void FDN::BMFastHadamard16(const float* input, float* output, float* temp16){
+    // level 1
+    // +
+    temp16[0] = input[0] + input[8];
+    temp16[1] = input[1] + input[9];
+    temp16[2] = input[2] + input[10];
+    temp16[3] = input[3] + input[11];
+    temp16[4] = input[4] + input[12];
+    temp16[5] = input[5] + input[13];
+    temp16[6] = input[6] + input[14];
+    temp16[7] = input[7] + input[15];
+    // -
+    temp16[8] = input[0] - input[8];
+    temp16[9] = input[1] - input[9];
+    temp16[10] = input[2] - input[10];
+    temp16[11] = input[3] - input[11];
+    temp16[12] = input[4] - input[12];
+    temp16[13] = input[5] - input[13];
+    temp16[14] = input[6] - input[14];
+    temp16[15] = input[7] - input[15];
+    
+    
+    // level 2
+    //+
+    output[0] = temp16[0] + temp16[4];
+    output[1] = temp16[1] + temp16[5];
+    output[2] = temp16[2] + temp16[6];
+    output[3] = temp16[3] + temp16[7];
+    //-
+    output[4] = temp16[0] - temp16[4];
+    output[5] = temp16[1] - temp16[5];
+    output[6] = temp16[2] - temp16[6];
+    output[7] = temp16[3] - temp16[7];
+    
+    //+
+    output[8] = temp16[8] + temp16[12];
+    output[9] = temp16[9] + temp16[13];
+    output[10] = temp16[10] + temp16[14];
+    output[11] = temp16[11] + temp16[15];
+    //-
+    output[12] = temp16[8] - temp16[12];
+    output[13] = temp16[9] - temp16[13];
+    output[14] = temp16[10] - temp16[14];
+    output[15] = temp16[11] - temp16[15];
+    
+    
+    // level 3
+    // +
+    temp16[0] = output[0] + output[2];
+    temp16[1] = output[1] + output[3];
+    // -
+    temp16[2] = output[0] - output[2];
+    temp16[3] = output[1] - output[3];
+    
+    // +
+    temp16[4] = output[4] + output[6];
+    temp16[5] = output[5] + output[7];
+    // -
+    temp16[6] = output[4] - output[6];
+    temp16[7] = output[5] - output[7];
+    
+    // +
+    temp16[8] = output[8] + output[10];
+    temp16[9] = output[9] + output[11];
+    // -
+    temp16[10] = output[8] - output[10];
+    temp16[11] = output[9] - output[11];
+    
+    // +
+    temp16[12] = output[12] + output[14];
+    temp16[13] = output[13] + output[15];
+    // -
+    temp16[14] = output[12] - output[14];
+    temp16[15] = output[13] - output[15];
+    
+    
+    // level 4
+    output[0] = temp16[0] + temp16[1];
+    output[1] = temp16[0] - temp16[1];
+    output[2] = temp16[2] + temp16[3];
+    output[3] = temp16[2] - temp16[3];
+    
+    output[4] = temp16[4] + temp16[5];
+    output[5] = temp16[4] - temp16[5];
+    output[6] = temp16[6] + temp16[7];
+    output[7] = temp16[6] - temp16[7];
+    
+    output[8] = temp16[8] + temp16[9];
+    output[9] = temp16[8] - temp16[9];
+    output[10] = temp16[10] + temp16[11];
+    output[11] = temp16[10] - temp16[11];
+    
+    output[12] = temp16[12] + temp16[13];
+    output[13] = temp16[12] - temp16[13];
+    output[14] = temp16[14] + temp16[15];
+    output[15] = temp16[14] - temp16[15];
+}
+
+
+
+// is x a power of 2?
+// reference: http://www.exploringbinary.com/ten-ways-to-check-if-an-integer-is-a-power-of-two-in-c/
+inline bool FDN::BMPowerOfTwoQ (size_t x)
+{
+    return ((x != 0) && ((x & (~x + 1)) == x));
+}
+
+
+
+
+
+
+
+//ITD for reverb
 inline void FDN::addReverbDelay(float* fdnLeft, float*fdnRight){
     for(int i = 0; i < CHANNELS/2; i++){
         //left, delay channels 0-CHANNELS/2
@@ -182,12 +687,13 @@ inline void FDN::addReverbDelay(float* fdnLeft, float*fdnRight){
     }
 }
 
+//ITD for direct rays
 inline void FDN::processDirectRays(float* input, float* directRaysOutput){
     directRaysOutput[0] = directRays[0].process(input[0]);
     directRaysOutput[1] = directRays[1].process(input[1]);
 }
 
-
+//Multiplexer
 inline void FDN::processTankOut(float fdnTankOut[CHANNELS]){
     for (size_t i = 0; i < numDelays; i++){
         size_t channel = delayTimesChannel[i];
@@ -195,6 +701,7 @@ inline void FDN::processTankOut(float fdnTankOut[CHANNELS]){
     }
 }
 
+//HRTF
 inline void FDN::filterChannels(float fdnTankOut[8], float directRay[2], float fdnTankOutLeft[8], float fdnTankOutRight[8]){
     //Filter left & right ear
     for (size_t i = 0; i < CHANNELS; i++){
@@ -219,70 +726,37 @@ FDN::FDN(bool powerSaveMode)
 
 void FDN::initialise(bool powerSaveMode){
     
-//    if (powerSaveMode){
-//        numDelays = DELAYUNITSSMALL*DELAYSPERUNIT;
-//        delayUnits = DELAYUNITSSMALL;
-//        numUncirculatedTaps = UNCIRCULATEDTAPSSMALL;
-//        printf("powersave");
-//    }
-//    else {
-        numDelays = NUMDELAYSSTD;
-        delayUnits = DELAYUNITSSTD;
-        numUncirculatedTaps = UNCIRCULATEDTAPSSTD;
-
-    
-    numTaps = numDelays + numUncirculatedTaps;
+    numDelays = TOTALDELAYS;
+    delayUnits = DELAYUNITSSTD;
     
     delayBuffers = NULL;
     
     parametersFDN =  Parameter();
+    
+//    BRDFenergy = energyTerm();
+    
     setParameterSafe(parametersFDN);
-    
-    
+
     
 }
 
 void FDN::resetReadIndices(){
     // set start, end indices for the first delay in the feedback tank
-    rwIndices[numUncirculatedTaps] = startIndices[numUncirculatedTaps] = (float*)delayBuffers;
-    endIndices[numUncirculatedTaps] = startIndices[numUncirculatedTaps] + delayTimes[numUncirculatedTaps];
+    rwIndices[0] = startIndices[0] = (float*)delayBuffers;
+    endIndices[0] = startIndices[0] + delayTimes[0];
     
     //print delay times
-    for (int i = 0; i < numTaps;i++){
+    for (int i = 0; i < numDelays;i++){
         if (delayTimes[i] < 1){
             delayTimes[i] = 10;
         }
     };
     
     // set start / end indices for the second feedback delay tap onwards
-    for (int i = numUncirculatedTaps + 1; i < numTaps; i++){
+    for (int i = 0 + 1; i < numDelays; i++){
         rwIndices[i] = startIndices[i] = startIndices[i-1] + delayTimes[i-1];
         endIndices[i] = startIndices[i] + delayTimes[i];
     }
-    
-    /*
-    // set times for the uncirculated taps
-    //Uncirculated taps are: delayTimes[0,....,numUncirculatedTaps-1, ..., numDelay-1]
-    int firstMultiTappedDelayIdx = numUncirculatedTaps;
-    for (int i = 0; i < numUncirculatedTaps; i++){
-        // find the index of the delay line on which this tap operates
-        int delayLineIdx = (i%numDelays)+firstMultiTappedDelayIdx;
-        // printf("delayLine Idx: %d\n", delayLineIdx);
-        // uncirculated delay times can not be longer than the circulated time on the same delay line
-        if(delayTimes[i] > delayTimes[delayLineIdx]){
-            int old = delayTimes[i];
-            // usually, the taps time won't exceed the delay time but the longest one might so, we generate a random time for it.
-            updateRand();
-            int delayLineLength = delayTimes[delayLineIdx];
-            delayTimes[i] = (rand % (delayLineLength-1)) + 1;
-            printf("ERROR! Delay uncirculated > delay circulated. Need to sort. delayTimes[%d]: %d delayTimes[delayLineidx]: %d, new delay line: %d\n", i, old, delayTimes[delayLineIdx], delayTimes[i]);
-        }
-        
-        startIndices[i] = startIndices[delayLineIdx];
-        endIndices[i] = endIndices[delayLineIdx];
-        rwIndices[i] = endIndices[i] - delayTimes[i];
-    }
-     */
     
     samplesUntilNextWrap = 0; // Initially, we trigger an unncecssary wrap operation to calculate the number of samples until the next actual wrap
 }
@@ -297,9 +771,10 @@ inline void FDN::updateRand()
 
 
 void FDN::resetTapAttenuation(float rt60){
-    for (int i = 0; i < numTaps; i++){
+    for (int i = 0; i < numDelays; i++){
         updateRand();
         feedbackTapGains[i] = gain(rt60, delayTimes[i]);
+      //  printf("Delay time: %d, gain %f \n", delayTimes[i], feedbackTapGains[i]);
     }
 }
 
@@ -316,9 +791,9 @@ void FDN::resetDelay(int totalDelayTime)
     // clear the buffers
     memset(delayBuffers, 0, sizeof(float) * totalDelayTime);
     memset(inputs, 0, sizeof(float) * numDelays);
-    memset(outputsPF, 0, sizeof(float) * numTaps);
-    memset(outputsAF, 0, sizeof(float) * numTaps);
-    memset(outputsBinaural, 0, sizeof(float) * numTaps);
+    memset(outputsPF, 0, sizeof(float) * numDelays);
+    memset(outputsAF, 0, sizeof(float) * numDelays);
+    memset(outputsBinaural, 0, sizeof(float) * numDelays);
     
     memset(z1, 0, sizeof(float) * numDelays); //DF2
     memset(z1a, 0, sizeof(float) * numDelays); //DF1
@@ -328,7 +803,7 @@ void FDN::resetDelay(int totalDelayTime)
 }
 
 inline void FDN::incrementIndices(){
-    for (int i = 0; i < numTaps; i++) {
+    for (int i = 0; i < numDelays; i++) {
         float** rwIndex = rwIndices + i;
         // increment
         (*rwIndex)++;
@@ -340,7 +815,7 @@ inline void FDN::incrementIndices(){
     // if any pointer is at the end of the buffer, check all pointers and wrap back to the beginning where necessary
     if (samplesUntilNextWrap <= 0) {
         samplesUntilNextWrap = LONG_MAX;
-        for (long i = 0; i< numTaps; i++){
+        for (long i = 0; i< numDelays; i++){
             float** rwIndex = rwIndices + i;
             float** endIndex = endIndices + i;
             
@@ -369,8 +844,8 @@ void FDN::setHFDecayMultiplier(float fc, float hfMult, float rt60){
     double g[numDelays];
     double D[numDelays];
     double gamma;
-    
-    fc = 8000.0f;
+//    
+//    fc = 8000.0f;
     
     gamma = tan((M_PI * fc) / double(SAMPLINGRATEF));
     
@@ -378,8 +853,8 @@ void FDN::setHFDecayMultiplier(float fc, float hfMult, float rt60){
         // set the filter gains
         //
         // here we find the gain already applied to each delay line
-        double broadbandGain = gain(rt60, delayTimes[i+numUncirculatedTaps]);
-        double desiredHFGain = gain(rt60 / hfMult, delayTimes[i+numUncirculatedTaps]);
+        double broadbandGain = gain(rt60, delayTimes[i]);
+        double desiredHFGain = gain(rt60 / hfMult, delayTimes[i]);
         // and now find how much additional filter gain to apply for the given increase in HF decay speed
         g[i] = desiredHFGain / broadbandGain;
         
@@ -404,7 +879,7 @@ void FDN::setHFDecayMultiplier(float fc, float hfMult, float rt60){
 double FDN::gain(double rt60, double delayLengthInSamples) {
  //  printf("Gain : %f \n", pow(10.f, (-3.0 *  avgDelay) / (rt60 * SAMPLINGRATEF) ));
    //   printf("Gain 2 : %f \n", pow(M_E, (-3.0 *  avgDelay) / (rt60 * SAMPLINGRATEF) ));
-    return pow(10.f, (-3.0 *  delayLengthInSamples) / (rt60 * SAMPLINGRATEF) );
+    return pow(10.f, (-3.f *  delayLengthInSamples) / (rt60 * SAMPLINGRATEF) );
     
    // return  pow (0.1 , delayLengthInSamples/SAMPLINGRATEF);
 }
@@ -414,378 +889,69 @@ void FDN::setParameter(Parameter params){
     parameterNeedsUpdate = true;
 }
 
-void FDN::setParameterSafe(Parameter params){
-    
 
-    clock_t begin = clock();
-    
-    printf("Begin Parameter setting:\n");
-    parametersFDN = newParametersFDN;
-    reverbOn = parametersFDN.roomSize > 0.05;
-    
-    randomSeed = 0; // reset the seed every time for consistent results
-    
-    // this is required to keep the mixing matrices unitary
-    matrixAttenuation = 1.0/sqrt((float)DELAYSPERUNIT);
-    
-    printf("Configuring Room Ray Model.. \n");
-    configureRoomRayModel();
-    setDirectGains();
-    printf("Setting Delay Channels.. \n");
-    setDelayChannels();
-    printf("Calculating Delay Times..\n");
-    setDelayTimes();
-
-    setDirectDelayTimes();
-    setDirectRayAngles();
-//    for (int i = 0; i<numTaps;i ++){
-//        printf("%d, ", delayTimes[i]);
-//    }
-    addSmoothingDelayTimes();
-    
-
-//    //reset the extradelays index to be zero
-//    for (int i = 0; i<NUMTAPSSTD-SMOOTHINGDELAYS;i++){
-//        outputGains[i] = 1.0/sqrt((float)(NUMTAPSSTD-SMOOTHINGDELAYS));
-//    }
-    for (int i = 0; i < SMOOTHINGDELAYS; i++){
-        inputGains[TOTALDELAYS - (SMOOTHINGDELAYS) + i] = 0.0f;
-        outputGains[TOTALDELAYS - (SMOOTHINGDELAYS) + i] = 0.0f;
-    }
-    for (int i = 0; i<numTaps;i ++){
-        printf("%d, ", int(RDN[i].delay));
-    }
-    printf("Then shuffled \n");
-
-    shuffleDelays();
-        for (int i = 0; i<numTaps;i ++){
-            printf("%d, ", delayTimes[i]);
-        }
-    //
-    
-    printf("Calculating Additional Single Tap Delays..\n");
-    setTempPoints();
-    calculateAdditionalDelays();
-
-    
-    printf("Setting Direct singleTap delay...\n");
-    setDirectSingleTapDelay();
-    
-    printf("\nSetting Filters.. \n");
-    setFilters();
-    
-     
-    int totalDelayTime = 0;
-    for(int i = numUncirculatedTaps; i < numTaps; i++) totalDelayTime += delayTimes[i];
-    
-    resetDelay(totalDelayTime);
-    
-    printf("Printing Parameters: \n");
-//    
- //   printf("Listener loc : %f %f \n", parametersFDN.listenerLoc.x, parametersFDN.listenerLoc.y);
-
-    resetReadIndices();
-    
-    setHFDecayMultiplier(2000,1.3f,parametersFDN.RT60);
-    
-    resetTapAttenuation(parametersFDN.RT60);
-    
-//    for (int i = 0 ; i < numTaps ; i++){
-//        printf("Index : %d, delay : %d, inputGain : %f, outputGain: %f attenuation : %f \n",i, delayTimes[i], inputGains[i], outputGains[i], feedbackTapGains[i]);
-//        
-//        float g = inputGains[i] + outputGains[i];
-//        printf("Total Point gain: %f \n", g );
-//        
-//    }
-    
-    clock_t end = clock();
-    
-    double elapsed_secs = double(end - begin) / CLOCKS_PER_SEC;
-    printf("Calculation time: %f\n", elapsed_secs);
-    
-//    //Left gain and right gain
-//    float LIG = 0.0f;
-//    float LOG = 0.0f;
-//    float RIG = 0.0f;
-//    float ROG = 0.0f;
-//    for (int i = 0; i< numTaps; i++){
-//        if (parametersFDN.listenerLoc.x <= roomBouncePoints[i].x){
-//            RIG += inputGains[i];
-//            ROG += outputGains[i];
-//        }
-//        else{
-//            LIG += inputGains[i];
-//            LOG += outputGains[i];
-//        }
-//    }
-
- //   printf(" Total output gain left: %f, outputgain right: %f, inputgain left:  %f, inputgainRight: %f, totalleft : %f , totalright : %f ", LOG, ROG, LIG, RIG, LOG+LIG, ROG+RIG);
-
-//    //plot the points
-//    for (int i = 0; i < NUMTAPSSTD; i++){
-//        printf("%f,", roomBouncePoints[i].x);
-//    }
-//    printf("NEXTLINE \n");
-//    for (int i = 0; i < NUMTAPSSTD; i++){
-//        printf("%f,", roomBouncePoints[i].y);
-//    }
-////
-//    for (int i = 0; i< SMOOTHINGDELAYS; i++){
-//    outputGains[i +( NUMTAPSSTD - SMOOTHINGDELAYS)] =  1.0/sqrt((float)SMOOTHINGDELAYS);
-//    }
-
-    printf("\n\n======Setting End=======\n\n");
-//        printf("DA %f \n", directAttenuation);
-}
-
-//Setup input & output gains, and points
-inline void FDN::configureRoomRayModel(){
-    
-    Point2d corners[4] = {Point2d(0.f,0.f), Point2d(parametersFDN.roomWidth, 0.f), Point2d(parametersFDN.roomWidth,parametersFDN.roomHeight), Point2d(0.f, parametersFDN.roomHeight)};
-    
-
-    roomRayModel.setRoomGeometry(corners, 4);
-    float rl[TOTALDELAYS];
-
-    printf("NUMTAPSSTD : %d SMOOTHINGDELAYSSTD: %d FLOORDELAYS: %d WALLDELAYS : %d\n", TOTALDELAYS, SMOOTHINGDELAYS, FLOORDELAYS, WALLDELAYS);
-
-    roomRayModel.setRayTracingPoints(roomBouncePoints, parametersFDN.soundSourceLoc, parametersFDN.roomHeight, parametersFDN.roomWidth, WALLDELAYS, outputGains, inputGains, parametersFDN.listenerLoc);
-        roomRayModel.setLocation(rl, TOTALDELAYS - (SMOOTHINGDELAYS), parametersFDN.listenerLoc, parametersFDN.soundSourceLoc, roomBouncePoints, outputGains, inputGains, FLOORDELAYS);
-}
 
 //Configure channel of each point
 void FDN::setDelayChannels(){
-    for (size_t i = 0; i < TOTALDELAYS - (SMOOTHINGDELAYS); i++){
-        delayTimesChannel[i] = determineChannel(roomBouncePoints[i].x, roomBouncePoints[i].y);
-    }
     
+
+    for (size_t i = 0; i < TOTALDELAYS-SMOOTHDELAY ; i++){
+        delayTimesChannel[i] = determineChannel(Room.segmentedSides[i].getMidpoint().x, Room.segmentedSides[i].getMidpoint().y);
+    }
+    delayTimes[TOTALDELAYS-SMOOTHDELAY] = 0;
+    
+
+    
+}
+
+void  FDN::setMultiTapDelayChannels(){
+    for (int i = 0; i<multiTapDelayTapsNumber; i++){
+        multiDelayLinePointsChannel[i] = determineChannel(multiDelayLinePoints[i].x, multiDelayLinePoints[i].y);
+    }
 }
 
 //Calculate delay time for each delay tap in the FDN
 inline void FDN::setDelayTimes(){
     
 
-    //Calculate delay with wall points
-    for (int i = 0; i<TOTALDELAYS - (SMOOTHINGDELAYS + FLOORDELAYS); i++){
-        
-        //if on the left of listener, use left ear x_pts < x_listener
-        //if on the right of listener, use right ear x_pts >= x_listener
-        size_t ch = delayTimesChannel[i];
-        
-        if (ch < CHANNELS/2){
-            //use right ear
-            float d1 = roomBouncePoints[i].distance(parametersFDN.soundSourceLoc);
-            float d2 = roomBouncePoints[i].distance(parametersFDN.listenerLocRightEar);
-            float td = (d1 + d2);
-            float delaySeconds = td / SOUNDSPEED;
-            delayTimes[i] = delaySeconds * SAMPLINGRATEF;
-        //    delayTimes[i] = (i * 33) + 100 + i;
-            reverbDelayValues[i] = Delays(delayTimes[i],ch,inputGains[i],outputGains[i], false, roomBouncePoints[i]);
-        }
-        else{
-            //use left ear
-            float d1 = parametersFDN.soundSourceLoc.distance(roomBouncePoints[i]);
-            float d2 = parametersFDN.listenerLocLeftEar.distance(roomBouncePoints[i]);
-            float td = (d1 + d2);
-
-            float delaySeconds = td / SOUNDSPEED;
-            delayTimes[i] = delaySeconds * SAMPLINGRATEF;
-       // delayTimes[i] = (i/2 * 340) + 840;
-            reverbDelayValues[i] = Delays(delayTimes[i],ch,inputGains[i],outputGains[i], false, roomBouncePoints[i]);
-        }
+    for (int i = 0; i < numDelays ; i++){
+        delayTimes[i] = 100+i * (i/2);
     }
-    
-    //Calculate delay with floor points
-    for (int i = (TOTALDELAYS - (SMOOTHINGDELAYS + FLOORDELAYS)); i < TOTALDELAYS - SMOOTHINGDELAYS; i++){
-            size_t ch = delayTimesChannel[i];
-        if (ch < CHANNELS/2){
-            //use right ear
-            float d1 = sqrtf( powf(roomBouncePoints[i].distance(parametersFDN.soundSourceLoc), 2.f) + powf(roomBouncePoints[i].z, 2.f));
-            float d2 = sqrtf( powf(roomBouncePoints[i].distance(parametersFDN.listenerLocRightEar), 2.f) + powf(roomBouncePoints[i].z, 2.f));
-            float td = (d1 + d2);
-            float delaySeconds = td / SOUNDSPEED;
-            delayTimes[i] = delaySeconds * SAMPLINGRATEF;
-            reverbDelayValues[i] = Delays(delayTimes[i],ch,inputGains[i],outputGains[i], false, roomBouncePoints[i]);
-        }
-        else{
-            //use left ear
-            float d1 = sqrtf( powf(roomBouncePoints[i].distance(parametersFDN.soundSourceLoc), 2.f) + powf(roomBouncePoints[i].z, 2.f));
-            float d2 = sqrtf( powf(roomBouncePoints[i].distance(parametersFDN.listenerLocLeftEar), 2.f) + powf(roomBouncePoints[i].z, 2.f));
-            float td = (d1 + d2);
-            float delaySeconds = td / SOUNDSPEED;
-            delayTimes[i] = delaySeconds * SAMPLINGRATEF;
-            reverbDelayValues[i] = Delays(delayTimes[i],ch,inputGains[i],outputGains[i], false, roomBouncePoints[i]);
-        }
-        
-        
-    }
-    
-    for (int i = numDelays - SMOOTHINGDELAYS; i < numDelays ; i++){
-        reverbDelayValues[i] =Delays(0, 0, 0, 0, true, Point2d());
-    }
-    
-    for (int i = 0 ; i<numDelays; i++){
-        RDN[i] = Delays(reverbDelayValues[i].delay, reverbDelayValues[i].channel, reverbDelayValues[i].inputGainIndex,reverbDelayValues[i].outputGainIndex, reverbDelayValues[i].extraDelay, reverbDelayValues[i].bp);
-    }
-//    
-//    std::sort(reverbDelayValues, reverbDelayValues+numDelays-SMOOTHINGDELAYS);
-    for (int i = 0; i<numDelays; i++){
-        printf("delay val : %f index : %lu %f %f \n", reverbDelayValues[i].delay, reverbDelayValues[i].channel, reverbDelayValues[i].inputGainIndex, reverbDelayValues[i].outputGainIndex);
-    }
-//    printf("\n\n");
-//    
-//    float number = 0;
-//    int index = 0;
-////    float runningInGain = 0;
-////    float runningOutGain = 0;
-//    int count = 0;
-//    bool lockRun = false;
-//    int maxDifference = 3;
-//    for (int i = 0; i < numDelays - SMOOTHINGDELAYS; i++){
-//        if (std::abs(reverbDelayValues[i].delay - number) >= maxDifference and lockRun == false){
-//            number = reverbDelayValues[i].delay;
-//            index = i;
-//          //  printf("Number %f \n", number);
-////            runningOutGain = 0.0f;
-////            runningInGain = 0.0f;
-//
-//        }
-//        else if (std::abs(reverbDelayValues[i].delay - number) < maxDifference){
-//
-////            runningInGain += pow(inputGains[reverbDelayValues[i].inputGainIndex],2);
-////            runningOutGain += pow(inputGains[reverbDelayValues[i].outputGainIndex],2);
-//            lockRun = true;
-//            count += 1;
-//           // printf("difference %f curr delay: %f number : %f channel : %lu prev channel : %lu \n", std::abs(reverbDelayValues[i].delay - number), reverbDelayValues[i].delay, number, reverbDelayValues[i].channel, reverbDelayValues[index].channel);
-//        }
-//        else if (std::abs(reverbDelayValues[i].delay - number) >= maxDifference and lockRun == true){
-//
-//            // printf("curr index: %d running index: %d \n", i, index);
-////            inputGains[index] = sqrtf(runningInGain);
-////            outputGains[index] = sqrtf(runningOutGain);
-////            inputGains[index] = runningInGain;
-////            outputGains[index] = runningOutGain;
-//            delayTimesChannel[index] = reverbDelayValues[index].channel;
-//            inputGains[index] = reverbDelayValues[index].inputGainIndex;
-//            outputGains[index] = reverbDelayValues[index].outputGainIndex;
-//            
-//            for (int k = index+1; k < i; k++){
-//                reverbDelayValues[k] = Delays(0, 0, 0, 0, true, Point2d());
-//                inputGains[k] = 0.0f;
-//                outputGains[k] = 0.0f;
-//                delayTimesChannel[k] = 0.f;
-//            }
-//            
-////            runningOutGain = 0.0f;
-////            runningInGain = 0.0f;
-//            number = reverbDelayValues[i].delay;
-//            lockRun = false;
-//            index = i;
-//            count = 0;
-//        }
-//        
-//    }
-//    
-//    //check last value
-//    if (lockRun == true){
-////        reverbDelayValues[index] = Delays(reverbDelayValues[index].delay, reverbDelayValues[index].channel, index,index, false, reverbDelayValues[index].bp);
-////        inputGains[index] = sqrtf(runningInGain);
-////        outputGains[index] = sqrtf(runningOutGain);
-//        delayTimesChannel[index] = reverbDelayValues[index].channel;
-//        inputGains[index] = reverbDelayValues[index].inputGainIndex;
-//        outputGains[index] = reverbDelayValues[index].outputGainIndex;
-//        for (int k = index+1; k < numDelays; k++){
-//            reverbDelayValues[k] = Delays(0, 0, 0, 0, true, Point2d());
-//            inputGains[k] = 0.0f;
-//            outputGains[k] = 0.0f;
-//            delayTimesChannel[k] = 0.f;
-//        }
-//    }
-//    
-////    for (int i = 0; i<numDelays; i++){
-////        printf("delay val : %f index : %lu %f %f \n", reverbDelayValues[i].delay, reverbDelayValues[i].channel, reverbDelayValues[i].inputGainIndex, reverbDelayValues[i].outputGainIndex);
-////    }
-//    
-//    
-//    // collapse saved one together
-//    int correctIndex = 0;
-//    for (int i = 0; i < numDelays; i++){
-//        if (reverbDelayValues[i].extraDelay == false){
-//            RDN[correctIndex] = Delays(reverbDelayValues[i].delay, reverbDelayValues[i].channel, reverbDelayValues[i].inputGainIndex,reverbDelayValues[i].outputGainIndex, false, reverbDelayValues[i].bp);
-//            correctIndex += 1;
-//        }
-//    }
-//    
-//    for (int i = correctIndex; i<numDelays; i++){
-//          RDN[correctIndex] = Delays(0, 0, -1,-1, true, Point2d());
-//    }
-//    
-    
-//    additionalSmoothingdelay = numTaps  - SMOOTHINGDELAYS - correctIndex ;
-//    printf("Additional smoothing delay  is : %d \n", additionalSmoothingdelay);
-//    
-    printf("\n");
-//    for (int i = 0; i<numDelays; i++){
-//        printf("delay val : %f index : %lu %f %f \n", RDN[i].delay, RDN[i].channel, RDN[i].inputGainIndex, RDN[i].outputGainIndex);
-//    }
-//
-    // normalize the total input gain to 1.0f
-    float totalSquaredInputGain = 0.0f;
-    for (size_t i = 0; i < numTaps; i++) {
-        RDN[i].inputGainIndex = fabsf(RDN[i].inputGainIndex*ROOMCEILING); //multiply by the room ceiling
-        totalSquaredInputGain += RDN[i].inputGainIndex*RDN[i].inputGainIndex;
-    }
-    
-    float inGainNormalize = 1.0f / sqrt(totalSquaredInputGain);
-    for (size_t i = 0; i < numTaps; i++) {
-        RDN[i].inputGainIndex *= inGainNormalize;
-    }
-    
-    //normalize the total out gain to 1.0f
-    float totalSquaredOutputGain = 0.0f;
-    for (size_t i = 0; i< numTaps; i++){
-        RDN[i].outputGainIndex = fabsf(RDN[i].outputGainIndex);
-        //   printf("Output gain: %f \n", outputGains[i]);
-        totalSquaredOutputGain += RDN[i].outputGainIndex*RDN[i].outputGainIndex;
-    }
-    
-    float outputGainNormalize = 1.0f / sqrtf(totalSquaredOutputGain);
-    for (size_t i = 0; i< numTaps; i++){
-        RDN[i].outputGainIndex *= outputGainNormalize;
-      //   printf("OutputGain[%lu] : %f \n", i, outputGains[i]);
-    }
-    
-    
-    
     
 }
 
 inline void FDN::setDirectGains(){
     
-    float rd = REFERENCEDISTANCE;
-    directAttenuation = rd / parametersFDN.soundSourceLoc.distance(parametersFDN.listenerLoc);
-    //Clip the distance between soundsource and listener to a min of 1.5m
-    if (directAttenuation > 1.5f){
-        directAttenuation = 1.5f;
-    }
+    float SL = parametersFDN.soundSourceLoc.distance(parametersFDN.listenerLoc);
     
-//    printf("DA %f \n", directAttenuation);
+//    if(SL<0.5f){
+//        SL = 0.5f;
+//    }
+    
+   // float averageDirectDelay = 0.5*((float)directDelayTimes[0] + (float)directDelayTimes[1]);
+   // float attenuationEyring = expf(-SOUNDSPEED * averageDirectDelay * 0.0162f / 4.0f / parametersFDN.RT60);
+    
+    
+    directAttenuation = DMIN/(SL) ;
+
 }
+
+
 //Setting direct delay value for two direct rays
-inline void FDN::setDirectDelayTimes(){
+inline void FDN::setDirectDelayTimes()
+{
+    
     //Calculate delay from source to receiver
     float directDelayLeft = parametersFDN.soundSourceLoc.distance(parametersFDN.listenerLocLeftEar) / SOUNDSPEED;
     float directDelayRight = parametersFDN.soundSourceLoc.distance(parametersFDN.listenerLocRightEar) / SOUNDSPEED;
     directDelayTimes[0] = directDelayLeft;
-    // printf("ddL %f \n", directDelayLeft);
+
     directDelayTimes[1] = directDelayRight;
-    // printf("ddR %f \n", directDelayRight);
-//    printf("Left delay direct: %f \n", directDelayTimes[0]*SAMPLINGRATEF);
-//    printf("Right delay direct: %f \n", directDelayTimes[1]*SAMPLINGRATEF);
 }
 
 //Setting direct ray angle with respect to listener location
-void FDN::setDirectRayAngles(){
+void FDN::setDirectRayAngles()
+{
     float yDiff, xDiff;
     yDiff = parametersFDN.soundSourceLoc.y - parametersFDN.listenerLocLeftEar.y;
     xDiff = parametersFDN.soundSourceLoc.x - parametersFDN.listenerLocLeftEar.x;
@@ -797,269 +963,11 @@ void FDN::setDirectRayAngles(){
     xDiff2 = parametersFDN.soundSourceLoc.x - parametersFDN.listenerLocRightEar.x;
     float angle2 = atan2(xDiff2, yDiff2) * 180.0f / M_PI;
     directRayAngles[1] = angle2;
+      printf("directRayAngle L %f R %f \n", directRayAngles[0], directRayAngles[1]);
 }
 
 
-//Shorten delay times by the same amount to maintain the response, but shorten the time gap between the sound output and listener hearing it
-inline void FDN::addSmoothingDelayTimes(){
 
-    float maxDirect = -1;
-    for (int i = 0; i<2; i++) {
-        if (directDelayTimes[i] > maxDirect){
-            maxDirect = directDelayTimes[i];
-        }
-    }
-    maxDirect *= SAMPLINGRATEF;
-    
-    float minDirect = MAXFLOAT;
-    for (int i = 0; i<2; i++) {
-        if (directDelayTimes[i] < minDirect){
-            minDirect = directDelayTimes[i];
-        }
-    }
-    minDirect*= SAMPLINGRATEF;
-    
-    float minReverb = MAXFLOAT;
-    
-    for (int i = 0; i < TOTALDELAYS - (SMOOTHINGDELAYS); i++){
-        float d = delayTimes[i] ;
-        if (d < minReverb){
-            minReverb = d;
-        }
-    }
-    float maxReverb = -1;
-    
-    for (int i = 0; i < TOTALDELAYS - (SMOOTHINGDELAYS); i++){
-        float d = delayTimes[i] ;
-        if (d > maxReverb){
-            maxReverb = d;
-        }
-    }
-    
-//    int nbin = 10;
-//    int interval = maxReverb / nbin;
-//    int bin[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-//    for (int i = 0; i<NUMTAPSSTD-SMOOTHINGDELAYS; i++){
-//        int time = delayTimes[i];
-//        for (int j = 0; j < nbin; j++){
-//            if (time > interval * j and time < interval*(j+1)){
-//                bin[j] += 1;
-//            }
-//        }
-//    }
-//    
-//    int maxbin = 0;
-//    int valmaxbin = 0;
-//    for (int i = 0; i<nbin; i++){
-//        if (bin[i] > valmaxbin){
-//            maxbin = i;
-//            valmaxbin = bin[i];
-//        }
-//    }
-//    std::random_device rd;     // only used once to initialise (seed) engine
-//    std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
-//
-//    int currbin = 0;
-//    for (int i = 0; i < (SMOOTHINGDELAYS); i++){
-//        currbin = currbin%nbin;
-//        while (true) {
-//            //round robin the bin, if the number is less than max bin add one to this bin and move to the next
-//        if (bin[currbin] < valmaxbin)
-//        {
-//           // printf("min inter : %d max inter : %d \n", currbin*interval, (currbin+1)*interval);
-//        std::uniform_real_distribution<float> uni(currbin*interval,(currbin+1)*interval); // guaranteed unbiased
-//        delayTimes[i + NUMTAPSSTD - (SMOOTHINGDELAYS)] = uni(rd);
-//        
-//         // printf("extradelay : %d \n",          delayTimes[i + NUMTAPSSTD - (SMOOTHINGDELAYS)]);
-//        reverbDelayValues[i + NUMTAPSSTD - (SMOOTHINGDELAYS)] = Delays(delayTimes[i+NUMTAPSSTD - (SMOOTHINGDELAYS)], INFINITY, -1, -1, true);
-//            bin[currbin] += 1;
-//            currbin += 1;
-//            break;
-//        }
-//        else{
-//            currbin += 1;
-//        }
-//        }
-//        
-//        //check who's the maxbin now
-//        for (int i = 0; i<nbin; i++){
-//            if (bin[i] > valmaxbin){
-//                maxbin = i;
-//                valmaxbin = bin[i];
-//            }
-//        }
-//        
-//    }
-    
-    
-    
-
-  //  printf("Max direct : %f, min direct : %f min reverb : %f max reverb : %f\n", maxDirect,minDirect, minReverb, maxReverb);
-    
-    std::random_device rd;     // only used once to initialise (seed) engine
-    std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
-    std::uniform_real_distribution<int> uni(minDirect + 25,maxReverb/2); // guaranteed unbiased
-        //ADD EXTRA DELAYS
-        for (int i = 0; i < (SMOOTHINGDELAYS + additionalSmoothingdelay); i++){
-            int value = uni(rd);
-            bool state = false;
-            while (state == false){
-                
-                bool stateall = true;
-                for (int j = 0; j< numDelays; j++){
-                    if (std::abs(value - RDN[j].delay) < 3){
-                        stateall = false;
-                    }
-                }
-                if (stateall == false){
-                        value ++;
-                }
-                else{
-                    state = true;
-                }
-            }
-            delayTimes[i + TOTALDELAYS - (SMOOTHINGDELAYS + additionalSmoothingdelay)] = value;
-          //  printf("extradelay : %f \n",          delayTimesNew[i + NUMTAPSSTD - (EXTRADELAYS * DELAYSPERUNIT)]);
-            RDN[i + TOTALDELAYS - (SMOOTHINGDELAYS + additionalSmoothingdelay)] = Delays(delayTimes[i+TOTALDELAYS - (SMOOTHINGDELAYS + additionalSmoothingdelay)], 0, 0.0f, 0.0f, true, Point2d());
-            
-        }
-    
-    printf("\n");
-//    for (int i = 0; i<numDelays; i++){
-//        printf("delay val : %f index : %lu %d %d bp : %f %f\n", RDN[i].delay, RDN[i].channel, RDN[i].inputGainIndex, RDN[i].outputGainIndex, RDN[i].bp.x, RDN[i].bp.y);
-//    }
-//
-//    int delayTimesSorted[NUMTAPSSTD] = {};
-//    for (int i = 0; i<numTaps; i++){
-//        delayTimesSorted[i] = delayTimes[i];
-//    }
-//    std::sort(delayTimesSorted, delayTimesSorted + NUMTAPSSTD);
-//    
-////    for (int i = 0; i<numTaps; i++){
-////        printf("Sorted DT : %d \n", delayTimesSorted[i]);
-////    }
-//    //ADD EXTRA DELAYS
-//    for (int i = 0; i < (SMOOTHINGDELAYS-1); i++){
-//        
-//        int time = (delayTimesSorted[i] + delayTimesSorted[i+1])/2;
-//        delayTimes[i + NUMTAPSSTD - (SMOOTHINGDELAYS)] = time;
-//      //  printf("extradelay : %f \n",          delayTimesNew[i + NUMTAPSSTD - (EXTRADELAYS * DELAYSPERUNIT)]);
-//        reverbDelayValues[i + NUMTAPSSTD - (SMOOTHINGDELAYS)] = Delays(delayTimes[i+NUMTAPSSTD - (SMOOTHINGDELAYS)], INFINITY, -1, -1, true);
-//        
-//    }
-//    int time = (delayTimesSorted[SMOOTHINGDELAYS-2] + delayTimesSorted[SMOOTHINGDELAYS])/3;
-//    delayTimes[NUMTAPSSTD-1] = time;
-//    reverbDelayValues[NUMTAPSSTD-1] = Delays(delayTimes[NUMTAPSSTD-1], INFINITY, -1, -1, true);
-}
-
-//Shuffle delays to smoothen output
-void FDN::shuffleDelays(){
-    
-//    for (int i = 0; i<numDelays; i++){
-//        printf("i : %d, delay val : %f index : %lu ig: %f og : %g \n", i, reverbDelayValues[i].delay, reverbDelayValues[i].channel, inputGains[reverbDelayValues[i].inputGainIndex], outputGains[reverbDelayValues[i].outputGainIndex]);
-//    }
-//    printf("\n\n");
-//    
-//    std::random_device rd;     // only used once to initialise (seed) engine
-//    std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
-//    std::uniform_real_distribution<float> uni(0,numTaps); // guaranteed unbiased
-//
-//    for (int i = 0; i < 30; i++){
-//        for (int k = 0; k<numDelays; k++){
-//            int idx =int(floor(uni(rd)));
-//            Delays temp = reverbDelayValues[idx];
-//            Delays ori = reverbDelayValues[k];
-//            reverbDelayValues[k] = temp;
-//            reverbDelayValues[idx] = ori;
-//        }
-//    }
-//    for (int i = 0; i < 5; i++){
-//        printf("%d rd number \n", int(floor(uni(rd))) );
-//    }
-
-//    for (int  i = 0; i<20; i++){
-//        std::random_shuffle(RDN, RDN + numDelays);
-//    }
-
-    std::sort(RDN, RDN+numDelays);
-
-    int roundrobin = NUMDELAYSSTD / DELAYSPERUNIT;
-//    printf("roundrobin %d \n", roundrobin);
-    int c = 0;
-    
-    for (int i =0; i<numDelays; i++){
-        Delays d = Delays(RDN[i].delay, RDN[i].channel, RDN[i].inputGainIndex, RDN[i].outputGainIndex, RDN[i].extraDelay, RDN[i].bp);
-        reverbDelayValues[(i%roundrobin) * 4 + c] = d;
-        if ((i % roundrobin) == (roundrobin-1)){
-          c += 1;
-        }
-    }
-    
-//    for (int i = 0; i< numDelays; i++){
-//        Delays d = Delays(RDN[i].delay, RDN[i].channel, RDN[i].inputGainIndex, RDN[i].outputGainIndex, RDN[i].extraDelay, RDN[i].bp);
-//                reverbDelayValues[i] = d;
-//    }
-//    
-//    for (int i = 0; i<numDelays; i++){
-//        printf("delay val : %f index : %lu %d %d bp : %f %f\n", reverbDelayValues[i].delay, reverbDelayValues[i].channel, reverbDelayValues[i].inputGainIndex, reverbDelayValues[i].outputGainIndex, reverbDelayValues[i].bp.x, reverbDelayValues[i].bp.y);
-//    }
-//    for (int i = 0; i<numDelays; i++){
-//        printf("delay valN : %f index : %lu %d %d \n", RDN[i].delay, RDN[i].channel, RDN[i].inputGainIndex, RDN[i].outputGainIndex);
-//    }
-//
-    //update values
-    
-    size_t delayTimesChannelNew[TOTALDELAYS];
-    float inputGainsNew[TOTALDELAYS];
-    float outputGainsNew[TOTALDELAYS];
-    int delaynew[TOTALDELAYS];
-    
-    //update shuffles
-    for (int i = 0; i <numDelays; i++){
-        delaynew[i] = reverbDelayValues[i].delay;
-
-        if ( reverbDelayValues[i].extraDelay ){
-            delayTimesChannelNew[i] = 0;
-            outputGainsNew[i] = 0.0f;
-            inputGainsNew[i] = 0.0f;
-        }
-        else{
-            delayTimesChannelNew[i] = reverbDelayValues[i].channel;
-            inputGainsNew[i] = reverbDelayValues[i].inputGainIndex;
-            outputGainsNew[i] = reverbDelayValues[i].outputGainIndex;
-        }
-    }
-    
-
-    
-    //cleanup
-    for (int i = 0; i<numDelays; i++){
-        delayTimesChannel[i] = 0;
-        delayTimes[i] = 0;
-        inputGains[i] = 0.0f;
-        outputGains[i] = 0.0f;
-    }
-    
-    //copy over
-    for (int i = 0; i<numDelays; i++){
-        delayTimesChannel[i] = delayTimesChannelNew[i];
-        delayTimes[i] = delaynew[i];
-        inputGains[i] = inputGainsNew[i];
-        outputGains[i] = outputGainsNew[i];
-    }
-//for (int i = 0; i<numDelays; i++){
-//    printf("In gain: %f outgain : %f \n", inputGains[i], outputGains[i]);
-//}
-//    for (int i = 0; i<numDelays; i++){
-//        printf("i: %d, delay val new : %d index : %lu %f %f \n", i, delayTimes[i], delayTimesChannel[i], inputGains[i], outputGains[i]);
-//    }
-//    for (int i = 0; i < numDelays; i++){
-//        avgDelay += delayTimes[i];
-//    }
-//    avgDelay /= float(numDelays);
-//    printf("Average delay is : %f \n", avgDelay);
-//    
-}
 
 //Set points for additional delay to enter the ears, 8 points, 1 per channel
 void FDN::setTempPoints(){
@@ -1073,13 +981,13 @@ void FDN::setTempPoints(){
     float h = parametersFDN.listenerLoc.y;
     
     for (int i = 0; i < CHANNELS/2; i++){
-        float angle = channelToAngle(i);
+        float angle = channeltoangleNormal(i);
         float m = 1.0f/tan(angle * M_PI / 180.f);
         //y = mx + 0
-        Point2d pointArray[4] = {Point2d(yBot/m, yBot),
-            Point2d(yTop/m, yTop),
-            Point2d(xLeft, m*xLeft),
-            Point2d(xRight, m*xRight)};
+        Vector3D pointArray[4] = {Vector3D(yBot/m, yBot),
+            Vector3D(yTop/m, yTop),
+            Vector3D(xLeft, m*xLeft),
+            Vector3D(xRight, m*xRight)};
         
         for (int j = 0; j< 4; j++){
             float xO = pointArray[j].x + parametersFDN.listenerLoc.x;
@@ -1105,10 +1013,9 @@ void FDN::setTempPoints(){
             }
         }
     }
-//    printf("Parameters RH : %f , parameters RW : %f \n", parametersFDN.roomHeight, parametersFDN.roomWidth);
-//    for (int i = 0; i<CHANNELS;i++){
-//        printf("TP : x %f , y %f \n", tempPoints[i].x, tempPoints[i].y);
-//    }
+    
+    
+    
 }
 
 void FDN::calculateAdditionalDelays(){
@@ -1117,17 +1024,28 @@ void FDN::calculateAdditionalDelays(){
         if (i < CHANNELS/2){ //CHANNEL 0 -3 FOR RIGHT EAR
             //near to right use temp0,leftear- temp0,rightear, 0 to 3, FOR LEFT EAR
             float d = (tempPoints[i].distance(parametersFDN.listenerLocLeftEar) - tempPoints[i].distance(parametersFDN.listenerLocRightEar))  / SOUNDSPEED;
+            
+            if(d<0.00000001){
+                printf("FALSE...\n");
+                d = 0.0001;
+            }
             additionalDelays[i] = d;
         }
         
         else{ //CHANNEL 4-7 FOR LEFT EAR
             //near to left use temp4,rightear - temp4,leftear, 4 to 7, FOR RIGHT EAR
             float d = (tempPoints[i].distance(parametersFDN.listenerLocRightEar) - tempPoints[i].distance(parametersFDN.listenerLocLeftEar))  / SOUNDSPEED;
+            
+            if(d<0.00000001){
+                printf("FALSE...\n");
+                d = 0.0001;
+            }
             additionalDelays[i] = d;
         }
 //         printf("DELAY ADDITIONAL : %f \n", additionalDelays[i]);
         reverbDelays[i].setTimeSafe(additionalDelays[i]);
     }
+    
     }
 
 void FDN::setDirectSingleTapDelay(){
@@ -1138,39 +1056,119 @@ void FDN::setDirectSingleTapDelay(){
 void FDN::setFilters(){
     //Right is negative, p.151 DAFX
     for (size_t i = 0; i < CHANNELS; i++){
-        leftEarFilter[i].setAngle(-channelToAngle(i), SAMPLINGRATEF, false);
-        rightEarFilter[i].setAngle(channelToAngle(i), SAMPLINGRATEF, true);
+        float angleL = channelToAngleLeftEar(i);
+        float angleR = channelToAngleRightEar(i);
+                printf("i %d Channel to Angle : left %f right %f\n", i,angleL, angleR);
+        
+        leftEarFilter[i].setAngle(channelToAngleLeftEar(i), SAMPLINGRATEF, false);
+        rightEarFilter[i].setAngle(channelToAngleRightEar(i), SAMPLINGRATEF, true);
     }
     
-    directRayFilter[0].setAngle(-directRayAngles[0], SAMPLINGRATEF,false);
-    directRayFilter[1].setAngle(directRayAngles[1], SAMPLINGRATEF, true);
-    
+    directRayFilter[0].setAngle(directRayAngles[0]+90.f, SAMPLINGRATEF,false);
+    directRayFilter[1].setAngle(directRayAngles[1]-90.f, SAMPLINGRATEF, true);
 }
 
-//Helper functions
+    //Helper functions
 float FDN::channeltoangleNormal(size_t channel){
         float channelWidth = 360.0f / (float)CHANNELS;
      return (float)channel * channelWidth + (channelWidth / 2.0f);
 }
 
-float FDN::channelToAngle(size_t channel){
-    float channelWidth = 360.0f / (float)CHANNELS;
-    size_t midChannel = CHANNELS / 2 - 1;
-   // return (float)channel * channelWidth + (channelWidth / 2.0f);
-    if (channel <= midChannel){
-        return (float)channel * channelWidth + (channelWidth / 2.0f);
+
+float FDN::channelToAngleLeftEar(size_t channel){
+    
+    //azimuth between 0 to 360
+    float azimuth = channeltoangleNormal(channel);
+    
+    if (azimuth >= 360.f){
+        azimuth -= 360.f;
     }
-    else{
-        return (-1.f  * (float) (CHANNELS - channel) * channelWidth )+ (channelWidth / 2.0f);
+    
+    //change azimuth to be between 0 to 180 and 0 to -180
+    if (azimuth > 180.f){
+        azimuth = azimuth - 360.f;
     }
+    
+    if(azimuth > 90.f and azimuth < 180.f){
+        float leftEarAngle = azimuth + 90.f - 360.f;
+        return leftEarAngle;
+    }
+    
+    return azimuth + 90.f;
+    
+    
 }
 
+float FDN::channelToAngleRightEar(size_t channel){
+    //azimuth between 0 to 360
+    float azimuth = channeltoangleNormal(channel);
+    
+    if (azimuth >= 360.f){
+        azimuth -= 360.f;
+    }
+    
+    //change azimuth to be between 0 to 180 and 0 to -180
+    if (azimuth > 180.f){
+        azimuth = azimuth - 360.f;
+    }
+    
+    if(azimuth > -180.f and azimuth < -90.f){
+        float leftEarAngle = azimuth - 90.f + 360.f;
+        return leftEarAngle;
+    }
+    
+    return azimuth - 90.f;
+    
+}
+
+//float FDN::channelToAngle(size_t channel){
+//    float channelWidth = 360.0f / (float)CHANNELS;
+//        size_t midChannel = CHANNELS / 2 - 1;
+//    
+//    return 45.f;
+////    return (float)channel * channelWidth  + (channelWidth / 2.0f);
+////        if (channel <= midChannel){
+////             printf("Channel : %lu Angle %f \n", channel, (float)channel * channelWidth + (channelWidth / 2.0f));
+////            return (float)channel * channelWidth + (channelWidth / 2.0f);
+////        }
+////        else{
+////              printf("Channel : %lu Angle %f \n", channel,(-1.f  * (float) (CHANNELS - channel) * channelWidth )+ (channelWidth / 2.0f));
+////            return (-1.f  * (float) (CHANNELS - channel) * channelWidth )+ (channelWidth / 2.0f);
+////        }
+//////
+//}
+
 size_t FDN::angleToChannel(float angleInDegrees){
+    
+        printf(" original angle %f \n", angleInDegrees);
+//    if (angleInDegrees<0){
+//        angleInDegrees = fabs(angleInDegrees) + 90.f;
+//    }
+//    else if(0 <= angleInDegrees and angleInDegrees<= 90){
+//        angleInDegrees = 90.f-angleInDegrees;
+//    }
+//    else if( 90 < angleInDegrees and angleInDegrees <= 180){
+//        float difference = 180.f-angleInDegrees;
+//        angleInDegrees = 270.f + difference;
+//    }
+//
+//    if(angleInDegrees >= 360.f){
+//        angleInDegrees = 360.f - angleInDegrees;
+//    }
+    if (fabs(angleInDegrees - 0.0f)<0.0001){
+        angleInDegrees = 0.0f;
+    }
+    
+    if (angleInDegrees < 0.0f ){
+        angleInDegrees = 360.f + angleInDegrees;
+    }
     
     float channelWidth = 360.0f / CHANNELS;
     
     //Channel 0 to 7 from 12 o'clock, clockwise according from DFX
-    return (size_t)floorf(angleInDegrees / channelWidth);
+    size_t channel =(size_t)floorf(angleInDegrees / channelWidth);
+        printf("From angle: %f to channel %lu \n", angleInDegrees, channel);
+    return channel;
 }
 
 //azimuth is clockwise 0 to 360 degree, p. 149 DAFX
@@ -1182,103 +1180,37 @@ size_t FDN::determineChannel(float x,float y){
     float yDistance = y - yL;
     
     float angle2 = atan2f(xDistance, yDistance) * 180.0f / M_PI;
-    if (angle2 < 0.0f ){
-        angle2 += 360.0f;
-    }
+    printf("x %f y %f lLocx %f lLocy %f \n",x,y,xL, yL );
+        printf("Angle %f \n", angle2);
+    
     return angleToChannel(angle2);
     
 }
 
-//Configuring random model
-void FDN::configureRandomModel(float roomSize){
+
+void FDN::setDelayNoOutputLength(){
     
-    // the roomSize variable scales decay time, linearly interpolating between the min and max values
-    float roomProportion = roomSize;
-    if (roomProportion > 1.0f) roomProportion = 1.0f;
+    //Set delay length for delay-without-output
+    std::random_device rd;     // only used once to initialise (seed) engine
+    std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
+    std::uniform_int_distribution<int> uni(50, ROOMCEILING/SOUNDSPEED * SAMPLE_RATE_F); // guaranteed unbiased
     
-    // Set up early reflections start and end times
-    float erStart = 0.003 + roomProportion * 0.015;
-    float erEnd = 0.0100 + roomProportion * 0.14;
     
-    // set delay times
-    int tapsPerChannel = numTaps / AUDIOCHANNELS;
-    float spacing = (erEnd - erStart) / (float)tapsPerChannel;
-    for (int j = 0; j < AUDIOCHANNELS; j++) {
-        for (int i = 0; i < tapsPerChannel; i++) {
-            updateRand();
-            delayTimes[(i*AUDIOCHANNELS)+j] = SAMPLINGRATEF*(erStart + ((float)i * spacing)); // evenly spaced delays
-            delayTimes[(i*AUDIOCHANNELS)+j] += (rand % (int)(SAMPLINGRATEF*spacing)) - (spacing * 0.5 * SAMPLINGRATEF); // unevenly spaced delays (velvet noise) See (http://users.spa.aalto.fi/mak/PUB/AES_Jarvelainen_velvet.pdf)
-            
-        }
+    
+    for (int i = 0; i<SMOOTHDELAY; i++){
+    int random_integer = uni(rng);
+        printf("Randomdelay length: %d \n", random_integer);
+    int delayTimeNoOutput = random_integer;
+    delayTimes[TOTALDELAYS-SMOOTHDELAY+i] = delayTimeNoOutput;
     }
-    
-    for (int  i = 0; i<10; i++){
-        std::random_shuffle(delayTimes, delayTimes + numDelays);
-    }
-    
-    //set filter to be all neutral
-    for (size_t i = 0; i < CHANNELS; i++){
-        leftEarFilter[i].setAngle(-77.5, SAMPLINGRATEF, false);
-        rightEarFilter[i].setAngle(77.5, SAMPLINGRATEF, true);
-    }
-    
-    //Calculate delay from source to receiver
-    float directDelayLeft = parametersFDN.soundSourceLoc.distance(parametersFDN.listenerLocLeftEar) / SOUNDSPEED;
-    float directDelayRight = parametersFDN.soundSourceLoc.distance(parametersFDN.listenerLocRightEar) / SOUNDSPEED;
-    directDelayTimes[0] = directDelayLeft;
-    directDelayTimes[1] = directDelayRight;
 
     
-    float yDiff2, xDiff2;
-    yDiff2 = parametersFDN.soundSourceLoc.y - parametersFDN.listenerLoc.y;
-    xDiff2 = parametersFDN.soundSourceLoc.x - parametersFDN.listenerLoc.x;
-    float angle = atan2(xDiff2, yDiff2) * 180.0f / M_PI;
-    directRayAngles[0] = angle;
-    directRayAngles[1] = angle;
-    
-    directRayFilter[0].setAngle(-directRayAngles[0], SAMPLINGRATEF,false);
-    directRayFilter[1].setAngle(directRayAngles[1], SAMPLINGRATEF, true);
-    
-    
-    for (int i = 0; i<TOTALDELAYS; i++){
-        outputGains[i] =  1.0/sqrt((float)numTaps);
-    }
 }
 
-/*
-//Use this if uncircullated tap > 0
-inline void FDN::sortDelayTimes(){
+float FDN::gainEyring(int delayTime){
     
-    for (int i = 0; i < numDelays; i++){
-        for (int j = 0; j < 2; j++){
-            //Compare uncirculated with circulated
-            int delay = delayTimes[numUncirculatedTaps + i];
-            int tap = delayTimes[i + (j * numDelays)];
-            //  printf("index %d delay %d indexTap %d tap %d \n", NUMTAPSSTD + i, delay, i + (j * numDelays), tap);
-            if (delay < tap){
-                //swap delays
-                delayTimes[NUMTAPSSTD + i] = tap;
-                delayTimes[i + (j * numDelays)] = delay;
-                
-                //  printf("%d %d %d %d\n", i , tap, delay, i + (j * numDelays));
-                //swap points
-                float x0 = roomBouncePoints[(i + (j*numDelays))].x;
-                float y0 = roomBouncePoints[(i + (j*numDelays))].y;
-                
-                float x1 = roomBouncePoints[(numUncirculatedTaps + i)].x;
-                float y1 = roomBouncePoints[(numUncirculatedTaps + i)].y;
-                
-                roomBouncePoints[(i + (j*numDelays))].x = x1;
-                roomBouncePoints[(i + (j*numDelays))].y = y1;
-                
-                roomBouncePoints[(numUncirculatedTaps + i)].x = x0;
-                roomBouncePoints[(numUncirculatedTaps + i)].y = y0;
-                
-            }
-        }
-    }
+    float power = -1.0f * SOUNDSPEED * delayTime/SAMPLE_RATE_F * 0.0405 / parametersFDN.RT60;
+    
+    return expf(power);
+    
 }
-*/
-
-
-

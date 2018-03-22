@@ -28,14 +28,16 @@ public:
     float roomSize = 0.15;
     float widthRatio = 0.5;
     float RT60 = 0.7f;
-    Point2d listenerLocation = Point2d(0.5f, (1.0f/3.0f));
-    Point2d soundLocation = Point2d(0.5f, (2.0f/3.0f));
+    Vector3D listenerLocation = Vector3D(0.5f, (1.0f/3.0f));
+    Vector3D soundLocation = Vector3D(0.5f, (2.0f/3.0f));
     
     void setListenerLocation(float* loc);
     void setSoundLocation(float* loc);
     void setSoundAndListenerLocation(float* locL, float* locS);
     void setRoomSize(float size);
-    void setWidthRatio(float size);
+
+        void setWidth(float size);
+        void setLength(float size);
     void setRT60(float RT60);
     void updateReverbSettings();
     void setRoomRayModel(bool roomRay);

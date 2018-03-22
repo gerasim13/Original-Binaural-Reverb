@@ -34,9 +34,15 @@ void FirstOrderFilter::setAngle(float theta, float fc, bool right){
     
    //  if ((theta >= 0.f and theta <= 170.f) or (theta <= 0.f and theta >= -170.f))
     //  if (theta >= -150.f and theta <= 150.f)
-        theta = -theta + 90.f;
+//        theta = -theta + 80.f;
     
-   // theta = theta - 90.0f;
+//    theta = theta - 90.0f;
+//    if (theta >= 360.f){
+//        theta -= 360.f;
+//    }
+    
+    
+    
     float theta0 = 150.0f ;
     float alfa_min = 0.1f ;
     float c = 334.0f; // speed of sound

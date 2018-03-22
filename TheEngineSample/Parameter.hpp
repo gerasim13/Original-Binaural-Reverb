@@ -11,23 +11,33 @@
 
 
 #include <stdio.h>
-#include "Point2d.hpp"
+#include "Vector3D.hpp"
 #include <math.h>
 
-#define HEIGHT 1.65f
-#define INITIALROOMSIZE 0.15f
-#define INITIALWIDTHRATIO 0.22f
-#define INITIALLISTENERX 0.5f
-#define INITIALLISTENERY (1.0f/3.0f)
+
+//
+//
+#define INITIALROOMSIZE 0.186f
+
+
+#define INITIALWIDTH 1.0f
+
+#define INITIALLENGTH 1.0f
+
 #define INITIALSOUNDX 0.5f
-#define INITIALSOUNDY (2.0f/3.0f)
-#define INITIALRT60 1.75f
+#define INITIALSOUNDY 2.f/3.f
+
+#define INITIALLISTENERX 0.5f
+#define INITIALLISTENERY 1.f/3.f
+
+#define INITIALRT60 2.0f
 #define RADIUSOFHEAD 0.08f //8cm radius of head
 #define ROOMSIZE 30.f //30 metres max
-#define ROOMCEILING 2.5f
+
+#define ROOMCEILING 3.0f
 #define INITIALDIRECTGAIN 1.f ///(4.f*M_PI);
 #define INITIALREVERBGAIN 1.f ///(4.f*M_PI);
-#define REFERENCEDISTANCE 1.f; //The original volume is as loud as we can hear within 1 metre away from the soundsource
+
 
 typedef struct Parameter {
     
@@ -35,17 +45,19 @@ typedef struct Parameter {
     Parameter(){
         this->roomSize = INITIALROOMSIZE * ROOMSIZE;
         this->roomSizeRatio = INITIALROOMSIZE;
-        this->widthRatio = INITIALWIDTHRATIO;
-        this->roomWidth = this->roomSize * (widthRatio/0.5f);
-        this->roomHeight = this->roomSize * ((1.0f-widthRatio)/0.5f);
+
+        this->roomWidthRatio = INITIALWIDTH;
+        this->roomHeightRatio = INITIALLENGTH;
+        this->roomWidth = this->roomWidthRatio * this->roomSize;
+        this->roomHeight = this->roomHeightRatio * this->roomSize;
         this->roomCeiling = ROOMCEILING;
         
-        Point2d L = Point2d(INITIALLISTENERX, INITIALLISTENERY);
+        Vector3D L = Vector3D(INITIALLISTENERX, INITIALLISTENERY);
         setListenerLocation(L);
-        Point2d S = Point2d(INITIALSOUNDX, INITIALSOUNDY);
+        Vector3D S = Vector3D(INITIALSOUNDX, INITIALSOUNDY);
         setSoundLocation(S);
-        this->listenerXYRatio = Point2d(INITIALLISTENERX, INITIALLISTENERY);
-        this->soundXYRatio = Point2d(INITIALSOUNDX, INITIALSOUNDY);
+        this->listenerXYRatio = Vector3D(INITIALLISTENERX, INITIALLISTENERY);
+        this->soundXYRatio = Vector3D(INITIALSOUNDX, INITIALSOUNDY);
     
         this->RT60 = INITIALRT60;
         
@@ -54,24 +66,27 @@ typedef struct Parameter {
         
         this->roomRayModelOn = true;
         this->reflection = 0.95f;
-        this->roomWidthRatio = 1.0f;
-        this->roomHeightRatio = 1.0f;
+
+      //  printf("RT60: %f, room width : %f, room length : %f\n", this->RT60, this->roomWidth, this->roomHeight);
+       // printf("Listenerloc : %f %f ssloc : %f %f \n", this->listenerLoc.x, this->listenerLoc.y, this->soundSourceLoc.x, this->soundSourceLoc.y);
+        
         
     }
     
-    void setListenerLocation(Point2d Ratio);
-    void setSoundLocation(Point2d Ratio);
+    void setListenerLocation(Vector3D Ratio);
+    void setSoundLocation(Vector3D Ratio);
     void setRoomSize(float size);
-    void setWidthRatio(float ratio);
+    void setWidth(float ratio);
+    void setLength(float ratio);
     
-    Point2d listenerXYRatio;
-    Point2d soundXYRatio;
+    Vector3D listenerXYRatio;
+    Vector3D soundXYRatio;
     
-    Point2d listenerLoc;
-    Point2d listenerLocLeftEar;
-    Point2d listenerLocRightEar;
-    Point2d soundSourceLoc;
-    float roomSizeRatio, RT60, widthRatio,roomSize;
+    Vector3D listenerLoc;
+    Vector3D listenerLocLeftEar;
+    Vector3D listenerLocRightEar;
+    Vector3D soundSourceLoc;
+    float roomSizeRatio, RT60,roomSize;
     float roomWidth, roomHeight;
     float roomWidthRatio, roomHeightRatio;
     float roomCeiling;
